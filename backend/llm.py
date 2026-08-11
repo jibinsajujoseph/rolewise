@@ -1,0 +1,77 @@
+import json
+import asyncio
+import google.generativeai as genai
+from pydantic import BaseModel
+from typing import Type, Dict, Any
+from google.generativeai.types import RequestOptions
+from google.api_core import exceptions
+
+# Prompts
+EXTRACTION_SYSTEM_PROMPT = """You are a resume parsing engine. Extract the structured content of the resume text into JSON exactly as specified by the schema. Do not summarize, infer, embellish, or add anything not explicitly present in the text. Preserve exact wording of bullets, titles, and dates as written. If a field is not present in the source, omit it or use null — never guess a value."""
+
+EXTRACTION_USER_PROMPT_TEMPLATE = """Resume text:
+
+{resume_text}
+
+Extract this into the JSON schema exactly as specified. Use only information present in the text above."""
+
+TAILORING_SYSTEM_PROMPT = """You are an expert resume editor. You will be given a candidate's resume as structured JSON (this is ground truth — the complete and only source of facts about the candidate) and a target job description. Produce a tailored version of the resume that improves its match to the job description and its readability by an Applicant Tracking System, while making zero factual changes to the candidate's history.
+
+Hard rules, no exceptions:
+1. Do not invent, add, or imply any employer, job title, tool, technology, certification, metric, date, or responsibility that is not already present in the source resume JSON.
+2. You may reword, reorder, reprioritize, and consolidate existing bullets and the summary to surface skills and terminology that are already true of the candidate and relevant to the job description.
+3. You may adopt the job description's terminology only when it is an accurate description of something the candidate already did — never to describe something absent from the source. For example, rewording a bullet to say "continuous integration and deployment pipelines" is fine if the source already mentions Jenkins or GitHub Actions; it is not fine if the source has no CI/CD tooling at all.
+4. If a skill or requirement in the job description has no basis anywhere in the source resume, do not add it to the resume in any form. It should only appear in jd_required_keywords.
+5. Preserve all dates, employer names, and job titles exactly as given in the source — these are never rewritten.
+6. Output only the JSON specified. No commentary, no markdown formatting, no explanation."""
+
+TAILORING_USER_PROMPT_TEMPLATE = """Source resume (ground truth JSON):
+{resume_json}
+
+Target job description:
+{jd_text}
+
+Produce the tailored resume and the job description's required keyword list, following the rules above exactly."""
+
+MODEL_NAME = "gemini-3.5-flash"
+
+async def call_llm(
+    provider: str,
+    api_key: str,
+    system_prompt: str,
+    user_prompt: str,
+    response_schema: Type[BaseModel],
+) -> Dict[str, Any]:
+    """
+    Adapter function to call an LLM (currently Gemini only) with retries.
+    """
+    if provider != "gemini":
+        raise ValueError(f"Unsupported provider: {provider}")
+
+    genai.configure(api_key=api_key)
+    model = genai.GenerativeModel(
+        model_name=MODEL_NAME,
+        system_instruction=system_prompt,
+        generation_config={
+            "response_mime_type": "application/json",
+            "response_schema": response_schema,
+            "temperature": 0.1 # Keep it deterministic
+        }
+    )
+
+    retries = [1, 2, 4]
+    
+    for i in range(len(retries) + 1):
+        try:
+            # Using generate_content_async for async support
+            response = await model.generate_content_async(user_prompt)
+            # The response text should be valid JSON as requested by response_schema
+            return json.loads(response.text)
+        except exceptions.ResourceExhausted as e:
+            if i < len(retries):
+                await asyncio.sleep(retries[i])
+            else:
+                raise Exception("Gemini rate limit hit — wait a moment and try again.")
+        except Exception as e:
+            raise Exception(f"Failed to call LLM: {str(e)}")
+
