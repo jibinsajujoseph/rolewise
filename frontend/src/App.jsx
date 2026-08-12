@@ -2,6 +2,8 @@ import { useState, useRef, useEffect } from 'react';
 import { UploadCloud, FileText, CheckCircle2, Copy, AlertCircle, Loader2, ArrowRight, Check, Download, FileDown } from 'lucide-react';
 import './index.css';
 
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+
 function App() {
   const [step, setStep] = useState(1);
   const [apiKey, setApiKey] = useState('');
@@ -24,7 +26,7 @@ function App() {
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    fetch('http://localhost:8000/api/config')
+    fetch(`${API_URL}/api/config`)
       .then(res => res.json())
       .then(data => {
         setRequiresApiKey(data.requires_api_key);
@@ -63,7 +65,7 @@ function App() {
         headers['X-Gemini-Api-Key'] = apiKey;
       }
 
-      const response = await fetch('http://localhost:8000/api/optimize', {
+      const response = await fetch(`${API_URL}/api/optimize`, {
         method: 'POST',
         headers,
         body: formData,
@@ -101,7 +103,7 @@ function App() {
   const handleExport = async (format) => {
       setIsExporting(true);
       try {
-          const response = await fetch(`http://localhost:8000/api/export/${format}`, {
+          const response = await fetch(`${API_URL}/api/export/${format}`, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ text: tailoredResume })

@@ -1,10 +1,9 @@
 import json
 import asyncio
-import google.generativeai as genai
+from google import genai
+from google.genai import errors as genai_errors
 from pydantic import BaseModel
 from typing import Type, Dict, Any
-from google.generativeai.types import RequestOptions
-from google.api_core import exceptions
 
 # Prompts
 EXTRACTION_SYSTEM_PROMPT = """You are a resume parsing engine. Extract the structured content of the resume text into JSON exactly as specified by the schema. Do not summarize, infer, embellish, or add anything not explicitly present in the text. Preserve exact wording of bullets, titles, and dates as written. If a field is not present in the source, omit it or use null — never guess a value."""
@@ -49,30 +48,30 @@ async def call_llm(
     if provider != "gemini":
         raise ValueError(f"Unsupported provider: {provider}")
 
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel(
-        model_name=MODEL_NAME,
-        system_instruction=system_prompt,
-        generation_config={
-            "response_mime_type": "application/json",
-            "response_schema": response_schema,
-            "temperature": 0.1 # Keep it deterministic
-        }
-    )
+    client = genai.Client(api_key=api_key)
 
     retries = [1, 2, 4]
-    
+
     for i in range(len(retries) + 1):
         try:
-            # Using generate_content_async for async support
-            response = await model.generate_content_async(user_prompt)
+            response = await client.aio.models.generate_content(
+                model=MODEL_NAME,
+                contents=user_prompt,
+                config={
+                    "system_instruction": system_prompt,
+                    "response_mime_type": "application/json",
+                    "response_schema": response_schema,
+                    "temperature": 0.1,
+                },
+            )
             # The response text should be valid JSON as requested by response_schema
             return json.loads(response.text)
-        except exceptions.ResourceExhausted as e:
-            if i < len(retries):
+        except genai_errors.ClientError as e:
+            if e.code == 429 and i < len(retries):
                 await asyncio.sleep(retries[i])
-            else:
+            elif e.code == 429:
                 raise Exception("Gemini rate limit hit — wait a moment and try again.")
+            else:
+                raise Exception(f"Failed to call LLM: {str(e)}")
         except Exception as e:
             raise Exception(f"Failed to call LLM: {str(e)}")
-

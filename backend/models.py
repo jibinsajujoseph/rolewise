@@ -3,9 +3,9 @@ from typing import List, Optional, Literal
 
 class Contact(BaseModel):
     name: str
-    email: Optional[str]
-    phone: Optional[str]
-    location: Optional[str]
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    location: Optional[str] = None
     links: List[str]
 
 class Experience(BaseModel):
@@ -13,23 +13,23 @@ class Experience(BaseModel):
     title: str
     start_date: str
     end_date: str
-    location: Optional[str]
+    location: Optional[str] = None
     bullets: List[str]
 
 class Education(BaseModel):
     institution: str
     degree: str
-    date: Optional[str]
+    date: Optional[str] = None
 
 class Project(BaseModel):
     name: str
-    date: Optional[str]
-    link: Optional[str]
+    date: Optional[str] = None
+    link: Optional[str] = None
     bullets: List[str]
 
 class ResumeContent(BaseModel):
     contact: Contact
-    summary: Optional[str]
+    summary: Optional[str] = None
     skills: List[str]
     experience: List[Experience]
     education: List[Education]

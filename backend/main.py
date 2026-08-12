@@ -245,7 +245,7 @@ async def export_docx(req: ExportRequest):
     import io
     from docx import Document
     doc = Document()
-    for line in req.text.split('\\n'):
+    for line in req.text.split('\n'):
         doc.add_paragraph(line)
     
     file_stream = io.BytesIO()
