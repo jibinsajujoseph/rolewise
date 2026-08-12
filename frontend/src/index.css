@@ -203,8 +203,8 @@ h3 {
 
 /* Specialized Components */
 .resume-editor {
-  font-family: var(--font-resume);
-  font-size: 11pt;
+  font-family: var(--font-body);
+  font-size: 13px;
   line-height: 1.6;
   padding: var(--spacing-2xl) var(--spacing-xl);
   background-color: #ffffff;

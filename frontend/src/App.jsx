@@ -1,11 +1,11 @@
 import { useState, useRef, useEffect } from 'react';
-import { UploadCloud, FileText, CheckCircle2, Copy, AlertCircle, Loader2, ArrowRight, Check, Download } from 'lucide-react';
+import { UploadCloud, FileText, CheckCircle2, Copy, AlertCircle, Loader2, ArrowRight, Check, Download, FileDown } from 'lucide-react';
 import './index.css';
 
 function App() {
   const [step, setStep] = useState(1);
   const [apiKey, setApiKey] = useState('');
-  const [requiresApiKey, setRequiresApiKey] = useState(true); // Default to true until we check
+  const [requiresApiKey, setRequiresApiKey] = useState(true);
   const [resumeFile, setResumeFile] = useState(null);
   const [jdText, setJdText] = useState('');
   
@@ -14,13 +14,16 @@ function App() {
   
   const [tailoredResume, setTailoredResume] = useState('');
   const [missingKeywords, setMissingKeywords] = useState([]);
+  const [addedKeywords, setAddedKeywords] = useState([]);
+  const [originalMatchScore, setOriginalMatchScore] = useState(0);
+  const [newMatchScore, setNewMatchScore] = useState(0);
   
   const [copied, setCopied] = useState(false);
+  const [isExporting, setIsExporting] = useState(false);
   
   const fileInputRef = useRef(null);
 
   useEffect(() => {
-    // Check if the backend has a server-side API key configured
     fetch('http://localhost:8000/api/config')
       .then(res => res.json())
       .then(data => {
@@ -74,13 +77,18 @@ function App() {
       
       setTailoredResume(data.tailored_resume_text);
       setMissingKeywords(data.missing_keywords || []);
-      setStep(2); // Move to results step
+      setAddedKeywords(data.added_keywords || []);
+      setOriginalMatchScore(data.original_match_score || 0);
+      setNewMatchScore(data.new_match_score || 0);
+      setStep(2);
     } catch (err) {
       setError(err.message);
     } finally {
       setIsLoading(false);
     }
   };
+
+
 
   const handleCopy = async () => {
     if (tailoredResume) {
@@ -90,10 +98,37 @@ function App() {
     }
   };
 
+  const handleExport = async (format) => {
+      setIsExporting(true);
+      try {
+          const response = await fetch(`http://localhost:8000/api/export/${format}`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: tailoredResume })
+          });
+          if (!response.ok) throw new Error("Export failed");
+          
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `Optimized_Resume.${format}`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(url);
+      } catch (err) {
+          alert(err.message);
+      } finally {
+          setIsExporting(false);
+      }
+  };
+
   const resetFlow = () => {
     setStep(1);
     setTailoredResume('');
     setMissingKeywords([]);
+    setAddedKeywords([]);
   };
 
   return (
@@ -111,7 +146,7 @@ function App() {
         </button>
       </header>
 
-      <main className="container">
+      <main className="container" style={{ maxWidth: step === 2 ? '1400px' : '1280px' }}>
         
         {step === 1 && (
           <div className="step-container">
@@ -220,64 +255,100 @@ function App() {
 
         {step === 2 && (
           <div className="step-container">
-            <div className="mb-6 flex items-center gap-2 cursor-pointer" onClick={resetFlow} style={{ color: 'var(--secondary)' }}>
-               <ArrowRight size={16} style={{ transform: 'rotate(180deg)' }}/> Back to Editor
-            </div>
-            
-            <div className="mb-6 flex justify-between items-end">
-              <div>
-                <h1 className="mb-2">Export Resume</h1>
-                <p style={{ color: 'var(--secondary)', maxWidth: '800px' }}>
-                  Your resume is optimized for Applicant Tracking Systems (ATS). Review the plain text format below or copy it to your clipboard.
-                </p>
+            <div className="mb-6 flex justify-between items-center">
+              <div className="flex items-center gap-2 cursor-pointer" onClick={resetFlow} style={{ color: 'var(--secondary)' }}>
+                 <ArrowRight size={16} style={{ transform: 'rotate(180deg)' }}/> Back
               </div>
               <div className="flex gap-4">
-                <button 
-                  className="btn btn-secondary" 
-                  onClick={handleCopy}
-                >
-                  {copied ? (
-                    <><CheckCircle2 size={16} /> Copied</>
-                  ) : (
-                    <><Copy size={16} /> Copy Text</>
-                  )}
-                </button>
-                <button className="btn btn-primary" onClick={handleCopy}>
-                  <Download size={16} /> Download
-                </button>
+                 <button className="btn btn-secondary" onClick={handleCopy}>
+                    {copied ? <><CheckCircle2 size={16} /> Copied</> : <><Copy size={16} /> Copy Text</>}
+                 </button>
+                 <button className="btn btn-secondary" onClick={() => handleExport('docx')} disabled={isExporting}>
+                    <FileDown size={16} /> Download DOCX
+                 </button>
+                 <button className="btn btn-primary" onClick={() => handleExport('pdf')} disabled={isExporting}>
+                    <Download size={16} /> Download PDF
+                 </button>
               </div>
             </div>
 
-            <div className="grid">
-              
-              <div className="card h-full flex flex-col p-0 overflow-hidden" style={{ gridColumn: 'span 2' }}>
-                
-                <div className="editor-header flex justify-between items-center" style={{ padding: '12px 24px', backgroundColor: '#f8fafc', borderBottom: '1px solid var(--outline)' }}>
-                  <div className="flex items-center gap-2" style={{ color: '#16a34a', fontSize: '13px', fontWeight: 500 }}>
-                     <Check size={16} /> ATS Parsable Format Confirmed
-                  </div>
-                  <span style={{ fontSize: '13px', color: 'var(--secondary)', fontFamily: 'var(--font-mono)' }}>Plain Text (.txt)</span>
-                </div>
-
-                {missingKeywords.length > 0 && (
-                  <div style={{ padding: '16px 24px', backgroundColor: '#fff1f2', borderBottom: '1px solid #ffe4e6' }}>
-                    <p style={{ color: '#be123c', fontSize: '14px', fontWeight: 500, marginBottom: '8px' }}>Missing Keywords from Job Description</p>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                      {missingKeywords.map((kw, i) => (
-                        <span key={i} className="chip" style={{ backgroundColor: '#ffffff', borderColor: '#fecdd3', color: '#be123c' }}>{kw}</span>
-                      ))}
+            <div className="optimization-layout">
+               <div className="editor-pane">
+                  <div className="card h-full flex flex-col p-0 overflow-hidden">
+                    <div className="editor-header flex justify-between items-center" style={{ padding: '12px 24px', backgroundColor: '#f8fafc', borderBottom: '1px solid var(--outline)' }}>
+                      <div className="flex items-center gap-2" style={{ color: '#16a34a', fontSize: '13px', fontWeight: 500 }}>
+                         <Check size={16} /> ATS Parsable Format Confirmed
+                      </div>
+                      <span style={{ fontSize: '13px', color: 'var(--secondary)', fontFamily: 'var(--font-mono)' }}>Plain Text (.txt)</span>
                     </div>
+                    <textarea
+                      className="resume-editor flex-grow"
+                      style={{ border: 'none', borderRadius: 0 }}
+                      value={tailoredResume}
+                      onChange={(e) => setTailoredResume(e.target.value)}
+                    />
                   </div>
-                )}
-                
-                <textarea
-                  className="resume-editor flex-grow"
-                  style={{ border: 'none', borderRadius: 0 }}
-                  value={tailoredResume}
-                  onChange={(e) => setTailoredResume(e.target.value)}
-                />
-              </div>
+               </div>
+
+               <div className="optimization-pane flex flex-col gap-4">
+                  
+                  <div className="card text-center flex flex-col items-center">
+                     <label className="label w-full text-left mb-4">Match Score</label>
+                     <div className="score-circle mb-2" style={{ position: 'relative' }}>
+                        <svg viewBox="0 0 36 36" className="circular-chart">
+                          <path className="circle-bg"
+                            d="M18 2.0845
+                              a 15.9155 15.9155 0 0 1 0 31.831
+                              a 15.9155 15.9155 0 0 1 0 -31.831"
+                          />
+                          <path className="circle-new"
+                            strokeDasharray={`${newMatchScore}, 100`}
+                            d="M18 2.0845
+                              a 15.9155 15.9155 0 0 1 0 31.831
+                              a 15.9155 15.9155 0 0 1 0 -31.831"
+                          />
+                          <path className="circle-original"
+                            strokeDasharray={`${originalMatchScore}, 100`}
+                            d="M18 2.0845
+                              a 15.9155 15.9155 0 0 1 0 31.831
+                              a 15.9155 15.9155 0 0 1 0 -31.831"
+                          />
+                          <text x="18" y="20.35" className="percentage">{newMatchScore}</text>
+                        </svg>
+                     </div>
+                     <p style={{ fontWeight: 500, fontSize: '14px', color: 'var(--primary)', marginBottom: '4px' }}>
+                        Original: {originalMatchScore} → New: {newMatchScore}
+                     </p>
+                     <p style={{ fontSize: '13px', color: 'var(--secondary)' }}>
+                        Consider adding missing keywords to further improve the match score.
+                     </p>
+                  </div>
+
+                  {addedKeywords.length > 0 && (
+                    <div className="card flex-grow" style={{ borderColor: '#86efac', backgroundColor: '#f0fdf4', alignSelf: 'flex-start', marginBottom: '16px' }}>
+                      <label className="label" style={{ color: '#16a34a', marginBottom: '8px' }}>Added Keywords</label>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {addedKeywords.map((kw, i) => (
+                          <span key={i} className="chip" style={{ backgroundColor: '#ffffff', borderColor: '#86efac', color: '#16a34a' }}>{kw}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {missingKeywords.length > 0 && (
+                    <div className="card flex-grow" style={{ borderColor: '#fecdd3', backgroundColor: '#fff1f2', alignSelf: 'flex-start' }}>
+                      <label className="label" style={{ color: '#be123c', marginBottom: '8px' }}>Missing Keywords</label>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                        {missingKeywords.map((kw, i) => (
+                          <span key={i} className="chip" style={{ backgroundColor: '#ffffff', borderColor: '#fecdd3', color: '#be123c' }}>{kw}</span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+               </div>
             </div>
+
           </div>
         )}
       </main>
@@ -325,6 +396,85 @@ function App() {
           to { transform: rotate(360deg); }
         }
         .animate-spin { animation: spin 1s linear infinite; }
+
+        .optimization-layout {
+           display: grid;
+           grid-template-columns: 1fr;
+           gap: 24px;
+        }
+        @media (min-width: 1024px) {
+           .optimization-layout {
+              grid-template-columns: 2fr 1fr;
+           }
+        }
+
+        .score-circle {
+           width: 120px;
+           height: 120px;
+        }
+        .circular-chart {
+           display: block;
+           margin: 0 auto;
+           max-width: 100%;
+           max-height: 250px;
+        }
+        .circle-bg {
+           fill: none;
+           stroke: #eee;
+           stroke-width: 3.8;
+        }
+        .circle-original {
+           fill: none;
+           stroke-width: 3.8;
+           stroke-linecap: round;
+           stroke: #0F172A;
+           transition: stroke-dasharray 0.5s ease-out;
+        }
+        .circle-new {
+           fill: none;
+           stroke-width: 3.8;
+           stroke-linecap: round;
+           stroke: #10b981;
+           transition: stroke-dasharray 0.5s ease-out;
+        }
+        .percentage {
+           fill: #0F172A;
+           font-family: var(--font-display);
+           font-weight: 700;
+           font-size: 10px;
+           text-anchor: middle;
+        }
+
+        .suggestion-item {
+           border: 1px solid var(--outline);
+           border-radius: 6px;
+           padding: 12px;
+        }
+        .suggestion-section {
+           font-family: var(--font-mono);
+           font-size: 11px;
+           color: var(--secondary);
+           margin-bottom: 8px;
+           text-transform: uppercase;
+        }
+        .suggestion-diff {
+           font-size: 13px;
+           font-family: var(--font-body);
+        }
+        .diff-old {
+           color: #be123c;
+           background-color: #fff1f2;
+           padding: 6px 8px;
+           border-radius: 4px;
+           margin-bottom: 4px;
+           text-decoration: line-through;
+        }
+        .diff-new {
+           color: #15803d;
+           background-color: #f0fdf4;
+           padding: 6px 8px;
+           border-radius: 4px;
+        }
       `}</style>
     </div>
   );

@@ -22,8 +22,9 @@ Hard rules, no exceptions:
 2. You may reword, reorder, reprioritize, and consolidate existing bullets and the summary to surface skills and terminology that are already true of the candidate and relevant to the job description.
 3. You may adopt the job description's terminology only when it is an accurate description of something the candidate already did — never to describe something absent from the source. For example, rewording a bullet to say "continuous integration and deployment pipelines" is fine if the source already mentions Jenkins or GitHub Actions; it is not fine if the source has no CI/CD tooling at all.
 4. If a skill or requirement in the job description has no basis anywhere in the source resume, do not add it to the resume in any form. It should only appear in jd_required_keywords.
-5. Preserve all dates, employer names, and job titles exactly as given in the source — these are never rewritten.
-6. Output only the JSON specified. No commentary, no markdown formatting, no explanation."""
+5. For jd_required_keywords, classify each keyword's importance: "required" for anything phrased as a hard requirement (e.g., "must have," "required," "X+ years of experience"), and "preferred" for anything phrased as a bonus (e.g., "nice to have," "preferred," "familiarity with").
+6. Preserve all dates, employer names, and job titles exactly as given in the source — these are never rewritten.
+7. Output only the JSON specified. No commentary, no markdown formatting, no explanation."""
 
 TAILORING_USER_PROMPT_TEMPLATE = """Source resume (ground truth JSON):
 {resume_json}
@@ -31,7 +32,7 @@ TAILORING_USER_PROMPT_TEMPLATE = """Source resume (ground truth JSON):
 Target job description:
 {jd_text}
 
-Produce the tailored resume and the job description's required keyword list, following the rules above exactly."""
+Produce the tailored resume and the job description's required keyword list (with importance classification), following the rules above exactly."""
 
 MODEL_NAME = "gemini-3.5-flash"
 

@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Response
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import json
@@ -16,7 +16,11 @@ from llm import (
     TAILORING_SYSTEM_PROMPT, 
     TAILORING_USER_PROMPT_TEMPLATE
 )
-from keywords import compute_missing_keywords
+from keywords import compute_missing_keywords, compute_match_score
+
+from pydantic import BaseModel
+class ExportRequest(BaseModel):
+    text: str
 
 app = FastAPI()
 
@@ -194,14 +198,59 @@ async def optimize_resume(
         status_code = 429 if "rate limit hit" in error_msg.lower() else 400
         return JSONResponse(status_code=status_code, content={"error": error_msg})
         
-    # 4. Compute missing keywords
-    jd_required_keywords = tailored_result_dict.get("jd_required_keywords", [])
-    missing_keywords = compute_missing_keywords(jd_required_keywords, original_resume_text)
-    
-    # 5. Render tailored resume to text
+    # 4. Render tailored resume to text
     tailored_resume_text = render_resume_to_text(tailored_result_dict.get("tailored_resume", {}))
+
+    # 5. Compute missing keywords and match scores
+    jd_required_keywords = tailored_result_dict.get("jd_required_keywords", [])
+    missing_keywords = compute_missing_keywords(jd_required_keywords, tailored_resume_text)
+    original_missing_keywords = compute_missing_keywords(jd_required_keywords, original_resume_text)
+    added_keywords = [kw for kw in original_missing_keywords if kw not in missing_keywords]
+    
+    original_match_score = compute_match_score(jd_required_keywords, original_resume_text)
+    new_match_score = compute_match_score(jd_required_keywords, tailored_resume_text)
     
     return OptimizeResponse(
         tailored_resume_text=tailored_resume_text,
-        missing_keywords=missing_keywords
+        original_match_score=original_match_score,
+        new_match_score=new_match_score,
+        missing_keywords=missing_keywords,
+        added_keywords=added_keywords
+    )
+
+@app.post("/api/export/pdf")
+async def export_pdf(req: ExportRequest):
+    from fpdf import FPDF
+    
+    # Replace common unsupported characters
+    clean_text = req.text.replace('•', '-') \
+                         .replace('–', '-') \
+                         .replace('—', '-') \
+                         .replace('“', '"') \
+                         .replace('”', '"') \
+                         .replace('‘', "'") \
+                         .replace('’', "'")
+    # Fallback for any other unsupported characters
+    clean_text = clean_text.encode('latin-1', 'replace').decode('latin-1')
+    
+    pdf = FPDF()
+    pdf.add_page()
+    pdf.set_font("Helvetica", size=11)
+    pdf.multi_cell(0, 5, text=clean_text)
+    pdf_bytes = pdf.output()
+    return Response(content=bytes(pdf_bytes), media_type="application/pdf")
+
+@app.post("/api/export/docx")
+async def export_docx(req: ExportRequest):
+    import io
+    from docx import Document
+    doc = Document()
+    for line in req.text.split('\\n'):
+        doc.add_paragraph(line)
+    
+    file_stream = io.BytesIO()
+    doc.save(file_stream)
+    return Response(
+        content=file_stream.getvalue(),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
     )

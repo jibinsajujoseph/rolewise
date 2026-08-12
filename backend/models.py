@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Literal
 
 class Contact(BaseModel):
     name: str
@@ -36,13 +36,20 @@ class ResumeContent(BaseModel):
     projects: List[Project]
     certifications: List[str]
 
+class Keyword(BaseModel):
+    keyword: str
+    importance: Literal["required", "preferred"]
+
 class TailoredResumeResponse(BaseModel):
     tailored_resume: ResumeContent
-    jd_required_keywords: List[str]
+    jd_required_keywords: List[Keyword]
 
 class OptimizeResponse(BaseModel):
     tailored_resume_text: str
+    original_match_score: int
+    new_match_score: int
     missing_keywords: List[str]
+    added_keywords: List[str]
 
 class ErrorResponse(BaseModel):
     error: str
