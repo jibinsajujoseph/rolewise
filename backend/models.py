@@ -6,7 +6,7 @@ class Contact(BaseModel):
     email: Optional[str] = None
     phone: Optional[str] = None
     location: Optional[str] = None
-    links: List[str]
+    links: List[str] = []
 
 class Experience(BaseModel):
     company: str
@@ -14,7 +14,7 @@ class Experience(BaseModel):
     start_date: str
     end_date: str
     location: Optional[str] = None
-    bullets: List[str]
+    bullets: List[str] = []
 
 class Education(BaseModel):
     institution: str
@@ -25,16 +25,16 @@ class Project(BaseModel):
     name: str
     date: Optional[str] = None
     link: Optional[str] = None
-    bullets: List[str]
+    bullets: List[str] = []
 
 class ResumeContent(BaseModel):
     contact: Contact
     summary: Optional[str] = None
-    skills: List[str]
-    experience: List[Experience]
-    education: List[Education]
-    projects: List[Project]
-    certifications: List[str]
+    skills: List[str] = []
+    experience: List[Experience] = []
+    education: List[Education] = []
+    projects: List[Project] = []
+    certifications: List[str] = []
 
 class KeywordSuggestion(BaseModel):
     keyword: str
@@ -59,18 +59,20 @@ class StructureSuggestion(BaseModel):
 
 class SuggestionsResponse(BaseModel):
     summary_suggestion: Optional[SummarySuggestion] = None
-    keyword_suggestions: List[KeywordSuggestion]
-    bullet_suggestions: List[BulletSuggestion]
-    structure_suggestions: List[StructureSuggestion]
+    keyword_suggestions: List[KeywordSuggestion] = []
+    bullet_suggestions: List[BulletSuggestion] = []
+    structure_suggestions: List[StructureSuggestion] = []
 
 class OptimizeResponse(BaseModel):
     extracted_resume: ResumeContent
     summary_suggestion: Optional[SummarySuggestion] = None
-    keyword_suggestions: List[KeywordSuggestion]
-    bullet_suggestions: List[BulletSuggestion]
-    structure_suggestions: List[StructureSuggestion]
+    keyword_suggestions: List[KeywordSuggestion] = []
+    bullet_suggestions: List[BulletSuggestion] = []
+    structure_suggestions: List[StructureSuggestion] = []
 
 class CoverLetterRequest(BaseModel):
+    provider: str
+    model: str
     resume: ResumeContent
     jd_text: str
 

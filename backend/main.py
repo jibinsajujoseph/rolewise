@@ -12,8 +12,8 @@ from models import (
 
 load_dotenv(override=True)
 from parsing import parse_resume_file
+from providers import PROVIDERS
 from llm import (
-    call_llm, 
     EXTRACTION_SYSTEM_PROMPT, 
     EXTRACTION_USER_PROMPT_TEMPLATE, 
     SUGGESTIONS_SYSTEM_PROMPT, 
@@ -38,24 +38,53 @@ app.add_middleware(
 
 @app.get("/api/config")
 async def get_config():
-    # If KEY_SOURCE is 'server', the frontend will NOT prompt for an API key.
-    # If it's 'byok' (or anything else), the frontend will require it.
     key_source = os.getenv("KEY_SOURCE", "byok").lower()
-    return {"requires_api_key": key_source != "server"}
+    providers = []
+    for pid, provider in PROVIDERS.items():
+        server_key = os.getenv(f"{pid.upper()}_API_KEY")
+        if key_source == "server":
+            requires_api_key = False
+        else:
+            requires_api_key = not bool(server_key)
+            
+        providers.append({
+            "id": pid,
+            "name": provider.name,
+            "requires_api_key": requires_api_key,
+        })
+    return {"providers": providers}
+
+@app.get("/api/models")
+async def get_models(provider: str, x_api_key: str = Header(None)):
+    if provider not in PROVIDERS:
+        return JSONResponse(status_code=400, content={"error": f"Unknown provider: {provider}"})
+    api_key = os.getenv(f"{provider.upper()}_API_KEY") or x_api_key
+    if not api_key:
+        return JSONResponse(status_code=400, content={"error": "Missing API key for this provider."})
+    try:
+        models = await PROVIDERS[provider].list_models(api_key)
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})
+    return {"models": [m.model_dump() for m in models]}
 
 
 @app.post("/api/optimize", response_model=OptimizeResponse, responses={400: {"model": ErrorResponse}, 429: {"model": ErrorResponse}})
 async def optimize_resume(
-    x_gemini_api_key: str = Header(None, description="User's Gemini API key (optional if set on server)"),
+    provider: str = Form(...),
+    model: str = Form(...),
+    x_api_key: str = Header(None, description="User's API key (optional if set on server)"),
     resume_file: UploadFile = File(...),
     jd_text: str = Form(...)
 ):
+    if provider not in PROVIDERS:
+        return JSONResponse(status_code=400, content={"error": f"Unknown provider: {provider}"})
+
     # Resolve API key: prefer server env var, then fallback to header
-    api_key = os.getenv("GEMINI_API_KEY") or x_gemini_api_key
+    api_key = os.getenv(f"{provider.upper()}_API_KEY") or x_api_key
     
     # Validate API key
     if not api_key:
-        return JSONResponse(status_code=400, content={"error": "Missing Gemini API key. Please provide it in the UI or configure the server."})
+        return JSONResponse(status_code=400, content={"error": "Missing API key. Please provide it in the UI or configure the server."})
     
     # 1. Read and parse file
     try:
@@ -71,9 +100,9 @@ async def optimize_resume(
     try:
         extraction_user_prompt = EXTRACTION_USER_PROMPT_TEMPLATE.format(resume_text=original_resume_text)
         
-        extracted_resume_dict = await call_llm(
-            provider="gemini",
+        extracted_resume_dict = await PROVIDERS[provider].generate(
             api_key=api_key,
+            model=model,
             system_prompt=EXTRACTION_SYSTEM_PROMPT,
             user_prompt=extraction_user_prompt,
             response_schema=ResumeContent
@@ -91,9 +120,9 @@ async def optimize_resume(
             jd_text=jd_text
         )
         
-        suggestions_result_dict = await call_llm(
-            provider="gemini",
+        suggestions_result_dict = await PROVIDERS[provider].generate(
             api_key=api_key,
+            model=model,
             system_prompt=SUGGESTIONS_SYSTEM_PROMPT,
             user_prompt=suggestions_user_prompt,
             response_schema=SuggestionsResponse
@@ -123,19 +152,21 @@ async def optimize_resume(
 @app.post("/api/cover-letter", response_model=CoverLetterResponse, responses={400: {"model": ErrorResponse}, 429: {"model": ErrorResponse}})
 async def generate_cover_letter(
     req: CoverLetterRequest,
-    x_gemini_api_key: str = Header(None),
+    x_api_key: str = Header(None),
 ):
-    api_key = os.getenv("GEMINI_API_KEY") or x_gemini_api_key
+    if req.provider not in PROVIDERS:
+        return JSONResponse(status_code=400, content={"error": f"Unknown provider: {req.provider}"})
+    api_key = os.getenv(f"{req.provider.upper()}_API_KEY") or x_api_key
     if not api_key:
-        return JSONResponse(status_code=400, content={"error": "Missing Gemini API key."})
+        return JSONResponse(status_code=400, content={"error": "Missing API key."})
     try:
         prompt = COVER_LETTER_USER_PROMPT_TEMPLATE.format(
             resume_json=json.dumps(req.resume.model_dump(), indent=2),
             jd_text=req.jd_text,
         )
-        result = await call_llm(
-            provider="gemini",
+        result = await PROVIDERS[req.provider].generate(
             api_key=api_key,
+            model=req.model,
             system_prompt=COVER_LETTER_SYSTEM_PROMPT,
             user_prompt=prompt,
             response_schema=CoverLetterResponse,

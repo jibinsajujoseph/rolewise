@@ -1,9 +1,3 @@
-import json
-import asyncio
-from google import genai
-from google.genai import errors as genai_errors
-from pydantic import BaseModel
-from typing import Type, Dict, Any
 
 # Prompts
 EXTRACTION_SYSTEM_PROMPT = """You are a resume parsing engine. Extract the structured content of the resume text into JSON exactly as specified by the schema. Do not summarize, infer, embellish, or add anything not explicitly present in the text. Preserve exact wording of bullets, titles, and dates as written. If a field is not present in the source, omit it or use null — never guess a value."""
@@ -60,45 +54,4 @@ Target job description:
 
 Write the cover letter."""
 
-MODEL_NAME = "gemini-3.5-flash"
 
-async def call_llm(
-    provider: str,
-    api_key: str,
-    system_prompt: str,
-    user_prompt: str,
-    response_schema: Type[BaseModel],
-) -> Dict[str, Any]:
-    """
-    Adapter function to call an LLM (currently Gemini only) with retries.
-    """
-    if provider != "gemini":
-        raise ValueError(f"Unsupported provider: {provider}")
-
-    client = genai.Client(api_key=api_key)
-
-    retries = [1, 2, 4]
-
-    for i in range(len(retries) + 1):
-        try:
-            response = await client.aio.models.generate_content(
-                model=MODEL_NAME,
-                contents=user_prompt,
-                config={
-                    "system_instruction": system_prompt,
-                    "response_mime_type": "application/json",
-                    "response_schema": response_schema,
-                    "temperature": 0.1,
-                },
-            )
-            # The response text should be valid JSON as requested by response_schema
-            return json.loads(response.text)
-        except genai_errors.ClientError as e:
-            if e.code == 429 and i < len(retries):
-                await asyncio.sleep(retries[i])
-            elif e.code == 429:
-                raise Exception("Gemini rate limit hit — wait a moment and try again.")
-            else:
-                raise Exception(f"Failed to call LLM: {str(e)}")
-        except Exception as e:
-            raise Exception(f"Failed to call LLM: {str(e)}")

@@ -7,7 +7,13 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
 function App() {
   const [step, setStep] = useState(1);
   const [apiKey, setApiKey] = useState('');
-  const [requiresApiKey, setRequiresApiKey] = useState(true);
+  
+  const [provider, setProvider] = useState(localStorage.getItem('rolewise_provider') || '');
+  const [model, setModel] = useState(localStorage.getItem('rolewise_model') || '');
+  const [availableProviders, setAvailableProviders] = useState([]);
+  const [availableModels, setAvailableModels] = useState([]);
+  const [isFetchingModels, setIsFetchingModels] = useState(false);
+  const [modelsError, setModelsError] = useState('');
   const [resumeFile, setResumeFile] = useState(null);
   const [jdText, setJdText] = useState('');
   const [isDragging, setIsDragging] = useState(false);
@@ -33,14 +39,76 @@ function App() {
     fetch(`${API_URL}/api/config`)
       .then(res => res.json())
       .then(data => {
-        setRequiresApiKey(data.requires_api_key);
+        setAvailableProviders(data.providers || []);
+        const prov = localStorage.getItem('rolewise_provider');
+        if (data.providers && data.providers.length > 0) {
+          if (!prov || !data.providers.find(p => p.id === prov)) {
+            setProvider(data.providers[0].id);
+          } else {
+            setProvider(prov);
+          }
+        }
       })
       .catch(err => {
         console.error("Failed to fetch config:", err);
       });
   }, []);
 
-  const canOptimize = (!requiresApiKey || apiKey.trim()) && resumeFile && jdText.trim() && !isLoading;
+  useEffect(() => {
+    if (!provider) return;
+    const currentProviderObj = availableProviders.find(p => p.id === provider);
+    if (currentProviderObj?.requires_api_key && !apiKey.trim()) {
+       setAvailableModels([]);
+       return;
+    }
+
+    const timer = setTimeout(() => {
+      setIsFetchingModels(true);
+      setModelsError('');
+      fetch(`${API_URL}/api/models?provider=${provider}`, {
+        headers: currentProviderObj?.requires_api_key ? { 'X-Api-Key': apiKey } : {}
+      })
+        .then(res => res.json().then(data => ({ status: res.status, data })))
+        .then(({ status, data }) => {
+          if (status !== 200) {
+            throw new Error(data.error || 'Failed to load models');
+          }
+          setAvailableModels(data.models || []);
+          if (data.models && data.models.length > 0) {
+             const savedModel = localStorage.getItem('rolewise_model');
+             if (!savedModel || !data.models.find(m => m.id === savedModel)) {
+                setModel(data.models[0].id);
+                localStorage.setItem('rolewise_model', data.models[0].id);
+             } else {
+                setModel(savedModel);
+             }
+          }
+        })
+        .catch(err => {
+          setModelsError(err.message);
+          setAvailableModels([]);
+        })
+        .finally(() => setIsFetchingModels(false));
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [provider, apiKey, availableProviders]);
+
+  const handleProviderChange = (e) => {
+    setProvider(e.target.value);
+    localStorage.setItem('rolewise_provider', e.target.value);
+    setModel('');
+    localStorage.removeItem('rolewise_model');
+  };
+
+  const handleModelChange = (e) => {
+    setModel(e.target.value);
+    localStorage.setItem('rolewise_model', e.target.value);
+  };
+
+  const currentProviderObj = availableProviders.find(p => p.id === provider);
+  const isKeyReady = !currentProviderObj?.requires_api_key || apiKey.trim();
+  const canOptimize = isKeyReady && provider && model && resumeFile && jdText.trim() && !isLoading;
 
   const processFile = (file) => {
     if (file) {
@@ -85,9 +153,12 @@ function App() {
       formData.append('resume_file', resumeFile);
       formData.append('jd_text', jdText);
       
+      formData.append('provider', provider);
+      formData.append('model', model);
+      
       const headers = {};
-      if (requiresApiKey) {
-        headers['X-Gemini-Api-Key'] = apiKey;
+      if (currentProviderObj?.requires_api_key) {
+        headers['X-Api-Key'] = apiKey;
       }
 
       const response = await fetch(`${API_URL}/api/optimize`, {
@@ -132,13 +203,15 @@ function App() {
     setCoverLetterError('');
     try {
       const headers = { 'Content-Type': 'application/json' };
-      if (requiresApiKey) {
-        headers['X-Gemini-Api-Key'] = apiKey;
+      if (currentProviderObj?.requires_api_key) {
+        headers['X-Api-Key'] = apiKey;
       }
       const response = await fetch(`${API_URL}/api/cover-letter`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
+          provider: provider,
+          model: model,
           resume: extractedResume,
           jd_text: jdText
         })
@@ -191,21 +264,59 @@ function App() {
               </p>
             </div>
 
-            {requiresApiKey && (
-              <div className="card mb-6 max-w-3xl mx-auto">
-                <label className="label">Configuration</label>
-                <input
-                  type="password"
-                  className="input"
-                  placeholder="Enter your Gemini API key"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                />
-                <p style={{ fontSize: '12px', color: 'var(--secondary)', marginTop: '8px' }}>
-                  Your key is never stored and only used for this session. Alternatively, configure GEMINI_API_KEY on the server.
-                </p>
+            <div className="card mb-6 max-w-3xl mx-auto">
+              <label className="label mb-4" style={{ fontSize: '16px', color: 'var(--primary)' }}>Configuration</label>
+              <div className="grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '16px' }}>
+                <div>
+                  <label className="label">Provider</label>
+                  <select className="input" value={provider} onChange={handleProviderChange}>
+                    {availableProviders.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                  </select>
+                </div>
+                {currentProviderObj?.requires_api_key && (
+                  <div>
+                    <label className="label">API Key</label>
+                    <input
+                      type="password"
+                      className="input"
+                      placeholder={`Enter your ${currentProviderObj?.name} API key`}
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                    />
+                  </div>
+                )}
               </div>
-            )}
+              <div>
+                <label className="label">Model</label>
+                {isFetchingModels ? (
+                  <div className="input flex items-center" style={{ color: 'var(--secondary)' }}>
+                    <Loader2 size={16} className="animate-spin mr-2" style={{ marginRight: '8px' }} /> Loading models...
+                  </div>
+                ) : (
+                  <select className="input" value={model} onChange={handleModelChange}>
+                     <option value="">Select a model</option>
+                     {availableModels.map(m => (
+                       <option key={m.id} value={m.id}>{m.display_name} {m.supports_structured_output === false ? '(No Strict Schema)' : ''}</option>
+                     ))}
+                  </select>
+                )}
+                {modelsError && (
+                  <p style={{ fontSize: '12px', color: '#be123c', marginTop: '8px' }}>
+                    Failed to load models: {modelsError}. You can type a model ID below if known.
+                  </p>
+                )}
+                {(!isFetchingModels && (availableModels.length === 0 || modelsError)) && (
+                   <input
+                      type="text"
+                      className="input mt-2"
+                      style={{ marginTop: '8px' }}
+                      placeholder="e.g. gpt-4o"
+                      value={model}
+                      onChange={handleModelChange}
+                   />
+                )}
+              </div>
+            </div>
 
             <div className="grid">
               <div className="card h-full flex flex-col">
