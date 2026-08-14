@@ -5,7 +5,10 @@ import json
 import os
 from dotenv import load_dotenv
 
-from models import ResumeContent, TailoredResumeResponse, OptimizeResponse, ErrorResponse
+from models import (
+    ResumeContent, SuggestionsResponse, OptimizeResponse, ErrorResponse,
+    CoverLetterRequest, CoverLetterResponse
+)
 
 load_dotenv(override=True)
 from parsing import parse_resume_file
@@ -13,14 +16,12 @@ from llm import (
     call_llm, 
     EXTRACTION_SYSTEM_PROMPT, 
     EXTRACTION_USER_PROMPT_TEMPLATE, 
-    TAILORING_SYSTEM_PROMPT, 
-    TAILORING_USER_PROMPT_TEMPLATE
+    SUGGESTIONS_SYSTEM_PROMPT, 
+    SUGGESTIONS_USER_PROMPT_TEMPLATE,
+    COVER_LETTER_SYSTEM_PROMPT,
+    COVER_LETTER_USER_PROMPT_TEMPLATE
 )
-from keywords import compute_missing_keywords, compute_match_score
-
-from pydantic import BaseModel
-class ExportRequest(BaseModel):
-    text: str
+from keywords import compute_missing_keywords
 
 app = FastAPI()
 
@@ -33,103 +34,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def render_resume_to_text(resume: dict) -> str:
-    """
-    Renders the tailored resume JSON into a clean plain text format.
-    """
-    lines = []
-    
-    # Contact
-    contact = resume.get("contact", {})
-    name = contact.get("name", "")
-    if name:
-        lines.append(name.upper())
-    
-    contact_info = []
-    if contact.get("email"): contact_info.append(contact["email"])
-    if contact.get("phone"): contact_info.append(contact["phone"])
-    if contact.get("location"): contact_info.append(contact["location"])
-    if contact.get("links"):
-        contact_info.extend(contact["links"])
-    
-    if contact_info:
-        lines.append(" | ".join(contact_info))
-    
-    lines.append("")
-    
-    # Summary
-    if resume.get("summary"):
-        lines.append("SUMMARY")
-        lines.append("-" * 10)
-        lines.append(resume["summary"])
-        lines.append("")
-        
-    # Skills
-    if resume.get("skills"):
-        lines.append("SKILLS")
-        lines.append("-" * 10)
-        lines.append(", ".join(resume["skills"]))
-        lines.append("")
-        
-    # Experience
-    if resume.get("experience"):
-        lines.append("EXPERIENCE")
-        lines.append("-" * 10)
-        for exp in resume["experience"]:
-            header = f"{exp.get('title', '')} at {exp.get('company', '')}"
-            
-            dates_loc = []
-            if exp.get("start_date") or exp.get("end_date"):
-                dates = f"{exp.get('start_date', '')} - {exp.get('end_date', 'Present')}"
-                dates_loc.append(dates)
-            if exp.get("location"):
-                dates_loc.append(exp["location"])
-                
-            if dates_loc:
-                header += f" ({', '.join(dates_loc)})"
-                
-            lines.append(header)
-            
-            for bullet in exp.get("bullets", []):
-                lines.append(f"• {bullet}")
-            lines.append("")
-            
-    # Projects
-    if resume.get("projects"):
-        lines.append("PROJECTS")
-        lines.append("-" * 10)
-        for proj in resume["projects"]:
-            header = proj.get("name", "")
-            if proj.get("date"):
-                header += f" ({proj['date']})"
-            if proj.get("link"):
-                header += f" - {proj['link']}"
-            lines.append(header)
-            
-            for bullet in proj.get("bullets", []):
-                lines.append(f"• {bullet}")
-            lines.append("")
 
-    # Education
-    if resume.get("education"):
-        lines.append("EDUCATION")
-        lines.append("-" * 10)
-        for edu in resume["education"]:
-            edu_line = f"{edu.get('degree', '')}, {edu.get('institution', '')}"
-            if edu.get("date"):
-                edu_line += f" ({edu['date']})"
-            lines.append(edu_line)
-        lines.append("")
-            
-    # Certifications
-    if resume.get("certifications"):
-        lines.append("CERTIFICATIONS")
-        lines.append("-" * 10)
-        for cert in resume["certifications"]:
-            lines.append(cert)
-        lines.append("")
-
-    return "\n".join(lines).strip()
 
 @app.get("/api/config")
 async def get_config():
@@ -178,79 +83,65 @@ async def optimize_resume(
         status_code = 429 if "rate limit hit" in error_msg.lower() else 400
         return JSONResponse(status_code=status_code, content={"error": error_msg})
         
-    # 3. Call 2 - Tailor resume against JD
+    # 3. Call 2 - Generate Suggestions
     try:
         extracted_json_str = json.dumps(extracted_resume_dict, indent=2)
-        tailoring_user_prompt = TAILORING_USER_PROMPT_TEMPLATE.format(
+        suggestions_user_prompt = SUGGESTIONS_USER_PROMPT_TEMPLATE.format(
             resume_json=extracted_json_str,
             jd_text=jd_text
         )
         
-        tailored_result_dict = await call_llm(
+        suggestions_result_dict = await call_llm(
             provider="gemini",
             api_key=api_key,
-            system_prompt=TAILORING_SYSTEM_PROMPT,
-            user_prompt=tailoring_user_prompt,
-            response_schema=TailoredResumeResponse
+            system_prompt=SUGGESTIONS_SYSTEM_PROMPT,
+            user_prompt=suggestions_user_prompt,
+            response_schema=SuggestionsResponse
         )
     except Exception as e:
         error_msg = str(e)
         status_code = 429 if "rate limit hit" in error_msg.lower() else 400
         return JSONResponse(status_code=status_code, content={"error": error_msg})
         
-    # 4. Render tailored resume to text
-    tailored_resume_text = render_resume_to_text(tailored_result_dict.get("tailored_resume", {}))
+    # 4. Compute 'present' flag for keyword suggestions
+    keyword_suggestions = suggestions_result_dict.get("keyword_suggestions", [])
+    # We create a pseudo jd_required_keywords list to reuse compute_missing_keywords
+    pseudo_jd_keywords = [{"keyword": kw["keyword"]} for kw in keyword_suggestions]
+    missing_keywords = compute_missing_keywords(pseudo_jd_keywords, original_resume_text)
+    
+    for kw in keyword_suggestions:
+        kw["present"] = kw["keyword"] not in missing_keywords
 
-    # 5. Compute missing keywords and match scores
-    jd_required_keywords = tailored_result_dict.get("jd_required_keywords", [])
-    missing_keywords = compute_missing_keywords(jd_required_keywords, tailored_resume_text)
-    original_missing_keywords = compute_missing_keywords(jd_required_keywords, original_resume_text)
-    added_keywords = [kw for kw in original_missing_keywords if kw not in missing_keywords]
-    
-    original_match_score = compute_match_score(jd_required_keywords, original_resume_text)
-    new_match_score = compute_match_score(jd_required_keywords, tailored_resume_text)
-    
     return OptimizeResponse(
-        tailored_resume_text=tailored_resume_text,
-        original_match_score=original_match_score,
-        new_match_score=new_match_score,
-        missing_keywords=missing_keywords,
-        added_keywords=added_keywords
+        extracted_resume=extracted_resume_dict,
+        summary_suggestion=suggestions_result_dict.get("summary_suggestion"),
+        keyword_suggestions=keyword_suggestions,
+        bullet_suggestions=suggestions_result_dict.get("bullet_suggestions", []),
+        structure_suggestions=suggestions_result_dict.get("structure_suggestions", [])
     )
 
-@app.post("/api/export/pdf")
-async def export_pdf(req: ExportRequest):
-    from fpdf import FPDF
-    
-    # Replace common unsupported characters
-    clean_text = req.text.replace('•', '-') \
-                         .replace('–', '-') \
-                         .replace('—', '-') \
-                         .replace('“', '"') \
-                         .replace('”', '"') \
-                         .replace('‘', "'") \
-                         .replace('’', "'")
-    # Fallback for any other unsupported characters
-    clean_text = clean_text.encode('latin-1', 'replace').decode('latin-1')
-    
-    pdf = FPDF()
-    pdf.add_page()
-    pdf.set_font("Helvetica", size=11)
-    pdf.multi_cell(0, 5, text=clean_text)
-    pdf_bytes = pdf.output()
-    return Response(content=bytes(pdf_bytes), media_type="application/pdf")
-
-@app.post("/api/export/docx")
-async def export_docx(req: ExportRequest):
-    import io
-    from docx import Document
-    doc = Document()
-    for line in req.text.split('\n'):
-        doc.add_paragraph(line)
-    
-    file_stream = io.BytesIO()
-    doc.save(file_stream)
-    return Response(
-        content=file_stream.getvalue(),
-        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-    )
+@app.post("/api/cover-letter", response_model=CoverLetterResponse, responses={400: {"model": ErrorResponse}, 429: {"model": ErrorResponse}})
+async def generate_cover_letter(
+    req: CoverLetterRequest,
+    x_gemini_api_key: str = Header(None),
+):
+    api_key = os.getenv("GEMINI_API_KEY") or x_gemini_api_key
+    if not api_key:
+        return JSONResponse(status_code=400, content={"error": "Missing Gemini API key."})
+    try:
+        prompt = COVER_LETTER_USER_PROMPT_TEMPLATE.format(
+            resume_json=json.dumps(req.resume.model_dump(), indent=2),
+            jd_text=req.jd_text,
+        )
+        result = await call_llm(
+            provider="gemini",
+            api_key=api_key,
+            system_prompt=COVER_LETTER_SYSTEM_PROMPT,
+            user_prompt=prompt,
+            response_schema=CoverLetterResponse,
+        )
+    except Exception as e:
+        error_msg = str(e)
+        status_code = 429 if "rate limit hit" in error_msg.lower() else 400
+        return JSONResponse(status_code=status_code, content={"error": error_msg})
+    return CoverLetterResponse(**result)

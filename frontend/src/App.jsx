@@ -10,18 +10,22 @@ function App() {
   const [requiresApiKey, setRequiresApiKey] = useState(true);
   const [resumeFile, setResumeFile] = useState(null);
   const [jdText, setJdText] = useState('');
+  const [isDragging, setIsDragging] = useState(false);
   
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   
-  const [tailoredResume, setTailoredResume] = useState('');
-  const [missingKeywords, setMissingKeywords] = useState([]);
-  const [addedKeywords, setAddedKeywords] = useState([]);
-  const [originalMatchScore, setOriginalMatchScore] = useState(0);
-  const [newMatchScore, setNewMatchScore] = useState(0);
+  const [extractedResume, setExtractedResume] = useState(null);
+  const [summarySuggestion, setSummarySuggestion] = useState(null);
+  const [keywordSuggestions, setKeywordSuggestions] = useState([]);
+  const [bulletSuggestions, setBulletSuggestions] = useState([]);
+  const [structureSuggestions, setStructureSuggestions] = useState([]);
   
-  const [copied, setCopied] = useState(false);
-  const [isExporting, setIsExporting] = useState(false);
+  const [coverLetter, setCoverLetter] = useState(null);
+  const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
+  const [coverLetterError, setCoverLetterError] = useState('');
+  const [copiedItems, setCopiedItems] = useState({});
+  const [expandedKeyword, setExpandedKeyword] = useState(null);
   
   const fileInputRef = useRef(null);
 
@@ -38,8 +42,7 @@ function App() {
 
   const canOptimize = (!requiresApiKey || apiKey.trim()) && resumeFile && jdText.trim() && !isLoading;
 
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
+  const processFile = (file) => {
     if (file) {
       if (file.name.endsWith('.pdf') || file.name.endsWith('.docx')) {
         setResumeFile(file);
@@ -48,6 +51,28 @@ function App() {
         setError('Please upload a PDF or DOCX file.');
         setResumeFile(null);
       }
+    }
+  };
+
+  const handleFileChange = (e) => {
+    processFile(e.target.files[0]);
+  };
+
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      processFile(e.dataTransfer.files[0]);
     }
   };
 
@@ -77,11 +102,13 @@ function App() {
         throw new Error(data.error || 'Failed to optimize resume');
       }
       
-      setTailoredResume(data.tailored_resume_text);
-      setMissingKeywords(data.missing_keywords || []);
-      setAddedKeywords(data.added_keywords || []);
-      setOriginalMatchScore(data.original_match_score || 0);
-      setNewMatchScore(data.new_match_score || 0);
+      setExtractedResume(data.extracted_resume);
+      setSummarySuggestion(data.summary_suggestion);
+      setKeywordSuggestions(data.keyword_suggestions || []);
+      setBulletSuggestions(data.bullet_suggestions || []);
+      setStructureSuggestions(data.structure_suggestions || []);
+      setCoverLetter(null);
+      setCopiedItems({});
       setStep(2);
     } catch (err) {
       setError(err.message);
@@ -92,45 +119,50 @@ function App() {
 
 
 
-  const handleCopy = async () => {
-    if (tailoredResume) {
-      await navigator.clipboard.writeText(tailoredResume);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+  const handleCopyItem = async (text, id) => {
+    if (text) {
+      await navigator.clipboard.writeText(text);
+      setCopiedItems(prev => ({ ...prev, [id]: true }));
+      setTimeout(() => setCopiedItems(prev => ({ ...prev, [id]: false })), 2000);
     }
   };
 
-  const handleExport = async (format) => {
-      setIsExporting(true);
-      try {
-          const response = await fetch(`${API_URL}/api/export/${format}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ text: tailoredResume })
-          });
-          if (!response.ok) throw new Error("Export failed");
-          
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `Optimized_Resume.${format}`;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          window.URL.revokeObjectURL(url);
-      } catch (err) {
-          alert(err.message);
-      } finally {
-          setIsExporting(false);
+  const handleGenerateCoverLetter = async () => {
+    setIsGeneratingCoverLetter(true);
+    setCoverLetterError('');
+    try {
+      const headers = { 'Content-Type': 'application/json' };
+      if (requiresApiKey) {
+        headers['X-Gemini-Api-Key'] = apiKey;
       }
+      const response = await fetch(`${API_URL}/api/cover-letter`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          resume: extractedResume,
+          jd_text: jdText
+        })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'Failed to generate cover letter');
+      setCoverLetter(data.cover_letter);
+    } catch (err) {
+      setCoverLetterError(err.message);
+    } finally {
+      setIsGeneratingCoverLetter(false);
+    }
   };
 
   const resetFlow = () => {
     setStep(1);
-    setTailoredResume('');
-    setMissingKeywords([]);
-    setAddedKeywords([]);
+    setExtractedResume(null);
+    setSummarySuggestion(null);
+    setKeywordSuggestions([]);
+    setBulletSuggestions([]);
+    setStructureSuggestions([]);
+    setCoverLetter(null);
+    setCoverLetterError('');
+    setExpandedKeyword(null);
   };
 
   return (
@@ -192,8 +224,15 @@ function App() {
                 />
                 
                 <div 
-                  className="upload-dropzone flex-grow"
+                  className={`upload-dropzone flex-grow ${isDragging ? 'dragging' : ''}`}
                   onClick={() => fileInputRef.current?.click()}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDrop={handleDrop}
+                  style={{
+                    backgroundColor: isDragging ? '#f0fdf4' : '',
+                    borderColor: isDragging ? 'var(--tertiary)' : ''
+                  }}
                 >
                   <UploadCloud size={40} color="var(--tertiary)" style={{ margin: '0 auto', marginBottom: '16px' }} />
                   {resumeFile ? (
@@ -261,94 +300,163 @@ function App() {
               <div className="flex items-center gap-2 cursor-pointer" onClick={resetFlow} style={{ color: 'var(--secondary)' }}>
                  <ArrowRight size={16} style={{ transform: 'rotate(180deg)' }}/> Back
               </div>
-              <div className="flex gap-4">
-                 <button className="btn btn-secondary" onClick={handleCopy}>
-                    {copied ? <><CheckCircle2 size={16} /> Copied</> : <><Copy size={16} /> Copy Text</>}
-                 </button>
-                 <button className="btn btn-secondary" onClick={() => handleExport('docx')} disabled={isExporting}>
-                    <FileDown size={16} /> Download DOCX
-                 </button>
-                 <button className="btn btn-primary" onClick={() => handleExport('pdf')} disabled={isExporting}>
-                    <Download size={16} /> Download PDF
-                 </button>
-              </div>
             </div>
 
-            <div className="optimization-layout">
-               <div className="editor-pane">
-                  <div className="card h-full flex flex-col p-0 overflow-hidden">
-                    <div className="editor-header flex justify-between items-center" style={{ padding: '12px 24px', backgroundColor: '#f8fafc', borderBottom: '1px solid var(--outline)' }}>
-                      <div className="flex items-center gap-2" style={{ color: '#16a34a', fontSize: '13px', fontWeight: 500 }}>
-                         <Check size={16} /> ATS Parsable Format Confirmed
-                      </div>
-                      <span style={{ fontSize: '13px', color: 'var(--secondary)', fontFamily: 'var(--font-mono)' }}>Plain Text (.txt)</span>
+            <div className="suggestions-layout flex flex-col gap-6 max-w-4xl mx-auto w-full">
+               
+               {summarySuggestion && (
+                 <div className="card">
+                    <div className="flex justify-between items-start mb-4">
+                      <label className="label mb-0" style={{ fontSize: '16px', color: 'var(--primary)' }}>Summary Suggestion</label>
+                      <button className="btn btn-secondary" onClick={() => handleCopyItem(summarySuggestion.suggested, 'summary')} style={{ padding: '6px 12px' }}>
+                        {copiedItems['summary'] ? <CheckCircle2 size={14} /> : <Copy size={14} />} {copiedItems['summary'] ? 'Copied' : 'Copy'}
+                      </button>
                     </div>
-                    <textarea
-                      className="resume-editor flex-grow"
-                      style={{ border: 'none', borderRadius: 0 }}
-                      value={tailoredResume}
-                      onChange={(e) => setTailoredResume(e.target.value)}
-                    />
-                  </div>
+                    {summarySuggestion.original && (
+                      <div className="diff-old mb-2">{summarySuggestion.original}</div>
+                    )}
+                    <div className="diff-new mb-3">{summarySuggestion.suggested}</div>
+                    <p style={{ fontSize: '13px', color: 'var(--secondary)' }}><strong>Why:</strong> {summarySuggestion.rationale}</p>
+                 </div>
+               )}
+
+               <div className="card">
+                  <label className="label" style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '16px' }}>Keyword Strategy</label>
+                  {keywordSuggestions.length === 0 ? (
+                    <p style={{ fontSize: '14px', color: 'var(--secondary)' }}>No keyword suggestions here — this section looks strong.</p>
+                  ) : (
+                    <div className="flex flex-col gap-4">
+                      <div className="flex flex-wrap gap-2">
+                        {keywordSuggestions.map((kw, idx) => (
+                          <span 
+                            key={idx} 
+                            onClick={() => setExpandedKeyword(expandedKeyword === idx ? null : idx)}
+                            className="chip cursor-pointer" 
+                            style={{ 
+                              backgroundColor: kw.present ? '#f0fdf4' : '#fff1f2', 
+                              borderColor: kw.present ? '#86efac' : '#fecdd3', 
+                              color: kw.present ? '#16a34a' : '#be123c',
+                              opacity: expandedKeyword === idx ? 0.7 : 1
+                            }}
+                          >
+                            {kw.keyword}
+                          </span>
+                        ))}
+                      </div>
+                      
+                      {expandedKeyword !== null && keywordSuggestions[expandedKeyword] && (
+                        <div className="suggestion-item" style={{ backgroundColor: 'var(--surface-container-lowest)' }}>
+                          <div className="flex justify-between items-start mb-2">
+                            <div>
+                              <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{keywordSuggestions[expandedKeyword].keyword}</span>
+                              <span style={{ marginLeft: '8px', fontSize: '12px', color: 'var(--secondary)', textTransform: 'capitalize' }}>
+                                ({keywordSuggestions[expandedKeyword].importance}, {keywordSuggestions[expandedKeyword].present ? 'Present' : 'Missing'})
+                              </span>
+                            </div>
+                            <button className="btn btn-secondary" onClick={() => handleCopyItem(keywordSuggestions[expandedKeyword].suggestion, `kw-${expandedKeyword}`)} style={{ padding: '4px 8px', fontSize: '12px' }}>
+                              {copiedItems[`kw-${expandedKeyword}`] ? <CheckCircle2 size={12} /> : <Copy size={12} />} {copiedItems[`kw-${expandedKeyword}`] ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+                          <p style={{ fontSize: '14px', color: 'var(--on-surface)' }}>{keywordSuggestions[expandedKeyword].suggestion}</p>
+                        </div>
+                      )}
+                    </div>
+                  )}
                </div>
 
-               <div className="optimization-pane flex flex-col gap-4">
+               <div className="card">
+                  <label className="label" style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '16px' }}>Bullet Improvements</label>
+                  {bulletSuggestions.length === 0 ? (
+                    <p style={{ fontSize: '14px', color: 'var(--secondary)' }}>No bullet suggestions here — this section looks strong.</p>
+                  ) : (
+                    <div className="flex flex-col gap-6">
+                      {Array.from(new Set(bulletSuggestions.map(b => b.section))).map((section) => (
+                        <div key={section}>
+                          <div className="suggestion-section">{section}</div>
+                          <div className="flex flex-col gap-4">
+                            {bulletSuggestions.filter(b => b.section === section).map((bullet, bIdx) => (
+                              <div key={bIdx} className="suggestion-item relative group">
+                                <div className="diff-old mb-2">{bullet.original_bullet}</div>
+                                <div className="diff-new mb-3 flex flex-col relative">
+                                  <span>
+                                    {bullet.suggested_bullet.includes('[') && bullet.suggested_bullet.includes(']') ? (
+                                      <span style={{ display: 'inline-block' }}>
+                                        {bullet.suggested_bullet.split(/(\[.*?\])/g).map((part, i) => 
+                                          part.startsWith('[') && part.endsWith(']') ? 
+                                          <span key={i} style={{ backgroundColor: '#fef08a', color: '#854d0e', padding: '2px 4px', borderRadius: '4px', fontSize: '12px', fontWeight: 600 }}>{part}</span> 
+                                          : part
+                                        )}
+                                      </span>
+                                    ) : (
+                                      bullet.suggested_bullet
+                                    )}
+                                  </span>
+                                </div>
+                                <p style={{ fontSize: '13px', color: 'var(--secondary)' }}><strong>Why:</strong> {bullet.reason}</p>
+                                <button className="btn btn-secondary absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handleCopyItem(bullet.suggested_bullet, `bullet-${section}-${bIdx}`)} style={{ padding: '4px 8px', fontSize: '12px', backgroundColor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+                                  {copiedItems[`bullet-${section}-${bIdx}`] ? <CheckCircle2 size={12} /> : <Copy size={12} />} {copiedItems[`bullet-${section}-${bIdx}`] ? 'Copied' : 'Copy'}
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+               </div>
+
+               {structureSuggestions.length > 0 && (
+                 <div className="card">
+                    <label className="label" style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '16px' }}>Structure & Formatting</label>
+                    <ul style={{ listStyleType: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                      {structureSuggestions.map((st, i) => (
+                        <li key={i} style={{ borderBottom: i < structureSuggestions.length - 1 ? '1px solid var(--outline)' : 'none', paddingBottom: i < structureSuggestions.length - 1 ? '12px' : '0' }}>
+                          <p style={{ fontWeight: 600, color: 'var(--primary)', fontSize: '14px', marginBottom: '4px' }}>{st.title}</p>
+                          <p style={{ fontSize: '14px', color: 'var(--secondary)' }}>{st.detail}</p>
+                        </li>
+                      ))}
+                    </ul>
+                 </div>
+               )}
+
+               <div className="card text-center mb-12" style={{ backgroundColor: 'var(--surface-container-low)' }}>
+                  <label className="label mb-2" style={{ fontSize: '16px', color: 'var(--primary)' }}>Final Touch</label>
+                  <p style={{ fontSize: '14px', color: 'var(--secondary)', marginBottom: '16px', maxWidth: '500px', margin: '0 auto 16px auto' }}>
+                    Need a cover letter tailored to this role? We can generate a concise, factual draft based on your verified resume.
+                  </p>
                   
-                  <div className="card text-center flex flex-col items-center">
-                     <label className="label w-full text-left mb-4">Match Score</label>
-                     <div className="score-circle mb-2" style={{ position: 'relative' }}>
-                        <svg viewBox="0 0 36 36" className="circular-chart">
-                          <path className="circle-bg"
-                            d="M18 2.0845
-                              a 15.9155 15.9155 0 0 1 0 31.831
-                              a 15.9155 15.9155 0 0 1 0 -31.831"
-                          />
-                          <path className="circle-new"
-                            strokeDasharray={`${newMatchScore}, 100`}
-                            d="M18 2.0845
-                              a 15.9155 15.9155 0 0 1 0 31.831
-                              a 15.9155 15.9155 0 0 1 0 -31.831"
-                          />
-                          <path className="circle-original"
-                            strokeDasharray={`${originalMatchScore}, 100`}
-                            d="M18 2.0845
-                              a 15.9155 15.9155 0 0 1 0 31.831
-                              a 15.9155 15.9155 0 0 1 0 -31.831"
-                          />
-                          <text x="18" y="20.35" className="percentage">{newMatchScore}</text>
-                        </svg>
-                     </div>
-                     <p style={{ fontWeight: 500, fontSize: '14px', color: 'var(--primary)', marginBottom: '4px' }}>
-                        Original: {originalMatchScore} → New: {newMatchScore}
-                     </p>
-                     <p style={{ fontSize: '13px', color: 'var(--secondary)' }}>
-                        Consider adding missing keywords to further improve the match score.
-                     </p>
-                  </div>
-
-                  {addedKeywords.length > 0 && (
-                    <div className="card flex-grow" style={{ borderColor: '#86efac', backgroundColor: '#f0fdf4', alignSelf: 'flex-start', marginBottom: '16px' }}>
-                      <label className="label" style={{ color: '#16a34a', marginBottom: '8px' }}>Added Keywords</label>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                        {addedKeywords.map((kw, i) => (
-                          <span key={i} className="chip" style={{ backgroundColor: '#ffffff', borderColor: '#86efac', color: '#16a34a' }}>{kw}</span>
-                        ))}
+                  {coverLetter ? (
+                    <div className="text-left mt-6">
+                      <div className="flex justify-between items-center mb-4">
+                        <span style={{ fontWeight: 600, color: 'var(--primary)' }}>Generated Cover Letter</span>
+                        <button className="btn btn-primary" onClick={() => handleCopyItem(coverLetter, 'coverLetter')} style={{ padding: '6px 12px' }}>
+                          {copiedItems['coverLetter'] ? <CheckCircle2 size={14} /> : <Copy size={14} />} {copiedItems['coverLetter'] ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
+                      <div className="suggestion-item p-6 whitespace-pre-wrap" style={{ backgroundColor: '#ffffff', fontSize: '14px', lineHeight: '1.6' }}>
+                        {coverLetter}
                       </div>
                     </div>
-                  )}
-
-                  {missingKeywords.length > 0 && (
-                    <div className="card flex-grow" style={{ borderColor: '#fecdd3', backgroundColor: '#fff1f2', alignSelf: 'flex-start' }}>
-                      <label className="label" style={{ color: '#be123c', marginBottom: '8px' }}>Missing Keywords</label>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                        {missingKeywords.map((kw, i) => (
-                          <span key={i} className="chip" style={{ backgroundColor: '#ffffff', borderColor: '#fecdd3', color: '#be123c' }}>{kw}</span>
-                        ))}
-                      </div>
+                  ) : (
+                    <div className="flex flex-col items-center gap-4">
+                      <button 
+                        className="btn btn-primary" 
+                        onClick={handleGenerateCoverLetter} 
+                        disabled={isGeneratingCoverLetter}
+                        style={{ padding: '12px 24px' }}
+                      >
+                        {isGeneratingCoverLetter ? <><Loader2 size={16} className="animate-spin" /> Generating...</> : 'Generate Cover Letter'}
+                      </button>
+                      {coverLetterError && (
+                        <div className="error-text justify-center" style={{ marginTop: '0', fontSize: '13px', backgroundColor: '#fff1f2', border: '1px solid #fecdd3', padding: '8px 12px', borderRadius: '6px', color: '#be123c', maxWidth: '100%', wordBreak: 'break-word', textAlign: 'left', display: 'flex', alignItems: 'flex-start' }}>
+                          <AlertCircle size={16} style={{ flexShrink: 0, marginTop: '2px' }} />
+                          <span style={{ marginLeft: '8px' }}>{coverLetterError}</span>
+                        </div>
+                      )}
                     </div>
                   )}
-
                </div>
+
             </div>
 
           </div>
@@ -410,42 +518,6 @@ function App() {
            }
         }
 
-        .score-circle {
-           width: 120px;
-           height: 120px;
-        }
-        .circular-chart {
-           display: block;
-           margin: 0 auto;
-           max-width: 100%;
-           max-height: 250px;
-        }
-        .circle-bg {
-           fill: none;
-           stroke: #eee;
-           stroke-width: 3.8;
-        }
-        .circle-original {
-           fill: none;
-           stroke-width: 3.8;
-           stroke-linecap: round;
-           stroke: #0F172A;
-           transition: stroke-dasharray 0.5s ease-out;
-        }
-        .circle-new {
-           fill: none;
-           stroke-width: 3.8;
-           stroke-linecap: round;
-           stroke: #10b981;
-           transition: stroke-dasharray 0.5s ease-out;
-        }
-        .percentage {
-           fill: #0F172A;
-           font-family: var(--font-display);
-           font-weight: 700;
-           font-size: 10px;
-           text-anchor: middle;
-        }
 
         .suggestion-item {
            border: 1px solid var(--outline);

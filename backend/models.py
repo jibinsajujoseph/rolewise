@@ -36,20 +36,46 @@ class ResumeContent(BaseModel):
     projects: List[Project]
     certifications: List[str]
 
-class Keyword(BaseModel):
+class KeywordSuggestion(BaseModel):
     keyword: str
     importance: Literal["required", "preferred"]
+    present: bool  # already in original resume (deterministic check)
+    suggestion: str  # concrete, copiable guidance on where/how to add it
 
-class TailoredResumeResponse(BaseModel):
-    tailored_resume: ResumeContent
-    jd_required_keywords: List[Keyword]
+class SummarySuggestion(BaseModel):
+    original: Optional[str] = None
+    suggested: str
+    rationale: str
+
+class BulletSuggestion(BaseModel):
+    section: str          # e.g. "Experience: AI Engineer at Akumen" or "Project: InboxIQ"
+    original_bullet: str
+    suggested_bullet: str
+    reason: str           # e.g. "Adds quantifiable metric", "Surfaces required keyword 'RAG'"
+
+class StructureSuggestion(BaseModel):
+    title: str
+    detail: str
+
+class SuggestionsResponse(BaseModel):
+    summary_suggestion: Optional[SummarySuggestion] = None
+    keyword_suggestions: List[KeywordSuggestion]
+    bullet_suggestions: List[BulletSuggestion]
+    structure_suggestions: List[StructureSuggestion]
 
 class OptimizeResponse(BaseModel):
-    tailored_resume_text: str
-    original_match_score: int
-    new_match_score: int
-    missing_keywords: List[str]
-    added_keywords: List[str]
+    extracted_resume: ResumeContent
+    summary_suggestion: Optional[SummarySuggestion] = None
+    keyword_suggestions: List[KeywordSuggestion]
+    bullet_suggestions: List[BulletSuggestion]
+    structure_suggestions: List[StructureSuggestion]
+
+class CoverLetterRequest(BaseModel):
+    resume: ResumeContent
+    jd_text: str
+
+class CoverLetterResponse(BaseModel):
+    cover_letter: str
 
 class ErrorResponse(BaseModel):
     error: str
