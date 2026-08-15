@@ -76,7 +76,6 @@ Write the cover letter."""
 MODEL_NAME = "gemini-3.5-flash-lite"
 
 async def call_llm(
-    provider: str,
     api_key: str,
     system_prompt: str,
     user_prompt: str,
@@ -86,9 +85,6 @@ async def call_llm(
     """
     Adapter function to call an LLM (currently Gemini only) with retries.
     """
-    if provider != "gemini":
-        raise ValueError(f"Unsupported provider: {provider}")
-
     client = genai.Client(api_key=api_key)
 
     retries = [1, 2, 4]
@@ -165,7 +161,6 @@ async def validate_grounding(
 
     try:
         validation_result_dict = await call_llm(
-            provider="gemini",
             api_key=api_key,
             system_prompt=GROUNDING_SYSTEM_PROMPT,
             user_prompt=user_prompt,

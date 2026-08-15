@@ -115,7 +115,6 @@ async def optimize_resume(
         extraction_user_prompt = EXTRACTION_USER_PROMPT_TEMPLATE.format(resume_text=original_resume_text)
         
         extracted_resume_dict = await call_llm(
-            provider="gemini",
             api_key=api_key,
             system_prompt=EXTRACTION_SYSTEM_PROMPT,
             user_prompt=extraction_user_prompt,
@@ -137,7 +136,6 @@ async def optimize_resume(
         # Upgrading from lite to flash for better reasoning and strict adherence to no-fabrication rules,
         # accepting a cost/latency tradeoff compared to the extraction step.
         suggestions_result_dict = await call_llm(
-            provider="gemini",
             api_key=api_key,
             system_prompt=SUGGESTIONS_SYSTEM_PROMPT,
             user_prompt=suggestions_user_prompt,
@@ -205,7 +203,6 @@ async def generate_cover_letter(
         # Upgrading from lite to flash for better prose and strict adherence to no-fabrication rules,
         # accepting a cost/latency tradeoff compared to the extraction step.
         result = await call_llm(
-            provider="gemini",
             api_key=api_key,
             system_prompt=COVER_LETTER_SYSTEM_PROMPT,
             user_prompt=prompt,
