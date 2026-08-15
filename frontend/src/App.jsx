@@ -29,6 +29,7 @@ function App() {
   const [coverLetterError, setCoverLetterError] = useState('');
   const [copiedItems, setCopiedItems] = useState({});
   const [expandedKeyword, setExpandedKeyword] = useState(null);
+  const [activeModal, setActiveModal] = useState(null);
   
   const fileInputRef = useRef(null);
 
@@ -524,15 +525,68 @@ function App() {
         )}
       </main>
 
+      {activeModal && (
+        <div className="modal-overlay" onClick={() => setActiveModal(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '24px' }}>
+          <div className="card modal-content" onClick={e => e.stopPropagation()} style={{ backgroundColor: 'var(--surface)', maxWidth: '600px', width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+            <button className="btn btn-secondary" onClick={() => setActiveModal(null)} style={{ position: 'absolute', top: '16px', right: '16px', padding: '4px 8px' }}>Close</button>
+            
+            {activeModal === 'privacy' && (
+              <div>
+                <h2 className="mb-4">Privacy Policy</h2>
+                <div className="flex flex-col gap-4" style={{ fontSize: '14px', color: 'var(--on-surface)', lineHeight: '1.6' }}>
+                  <p><strong>Your Data is Yours.</strong> At Rolewise AI, we take your privacy seriously. Here is exactly how we handle your data:</p>
+                  
+                  <div>
+                    <h3 style={{ fontSize: '16px', marginBottom: '8px' }}>What is sent to our servers:</h3>
+                    <ul style={{ paddingLeft: '24px', listStyleType: 'disc' }}>
+                      <li>Your resume file (PDF or DOCX)</li>
+                      <li>The Job Description text you provide</li>
+                      <li>Your Gemini API key (sent securely as an HTTP header)</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h3 style={{ fontSize: '16px', marginBottom: '8px' }}>How it is processed:</h3>
+                    <ul style={{ paddingLeft: '24px', listStyleType: 'disc' }}>
+                      <li><strong>No Storage:</strong> Resumes and Job Descriptions are processed in-memory and are <strong>not persisted or saved</strong> on our servers.</li>
+                      <li><strong>API Key Security:</strong> Your Gemini API key is only forwarded to the Gemini API during your request. It is <strong>never logged, cached, or saved</strong> by Rolewise AI.</li>
+                    </ul>
+                  </div>
+                  
+                  <p style={{ marginTop: '8px' }}>By using this tool, you agree to this processing purely for the purpose of generating your optimization report.</p>
+                </div>
+              </div>
+            )}
+            
+            {activeModal === 'terms' && (
+              <div>
+                <h2 className="mb-4">Terms of Service</h2>
+                <p style={{ fontSize: '14px', color: 'var(--secondary)' }}>
+                  This is a placeholder for the Terms of Service. By using this tool, you accept that it is provided "as is" for demonstration and optimization purposes.
+                </p>
+              </div>
+            )}
+
+            {activeModal === 'contact' && (
+              <div>
+                <h2 className="mb-4">Contact</h2>
+                <p style={{ fontSize: '14px', color: 'var(--secondary)' }}>
+                  This is a placeholder for Contact information. 
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <footer className="app-footer text-center" style={{ padding: '48px 24px', backgroundColor: 'var(--surface-container-high)', marginTop: '48px' }}>
         <h3 className="mb-4">Rolewise AI</h3>
         <div className="flex justify-center gap-4 mb-4" style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>
-          <span>Privacy Policy</span>
-          <span>Terms of Service</span>
-          <span>ATS Guide</span>
-          <span>Contact</span>
+          <span onClick={() => setActiveModal('privacy')} className="footer-link">Privacy Policy</span>
+          <span onClick={() => setActiveModal('terms')} className="footer-link">Terms of Service</span>
+          <span onClick={() => setActiveModal('contact')} className="footer-link">Contact</span>
         </div>
-        <p style={{ fontSize: '12px', color: 'var(--secondary)', fontFamily: 'var(--font-mono)' }}>© 2024 Rolewise AI. Precision Career Engineering.</p>
+        <p style={{ fontSize: '12px', color: 'var(--secondary)', fontFamily: 'var(--font-mono)' }}>© {new Date().getFullYear()} Rolewise AI. Precision Career Engineering.</p>
       </footer>
       
       <style>{`
@@ -610,6 +664,15 @@ function App() {
            background-color: #f0fdf4;
            padding: 6px 8px;
            border-radius: 4px;
+        }
+        
+        .footer-link {
+           cursor: pointer;
+           transition: color 0.2s;
+        }
+        .footer-link:hover {
+           color: var(--primary);
+           text-decoration: underline;
         }
       `}</style>
     </div>
