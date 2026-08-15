@@ -39,6 +39,7 @@ class ResumeContent(BaseModel):
     education: List[Education]
     projects: List[Project]
     certifications: List[str]
+    remaining_calls: Optional[int] = None
 
 class KeywordSuggestion(BaseModel):
     keyword: str
@@ -75,6 +76,7 @@ class SuggestResponse(BaseModel):
     keyword_suggestions: List[KeywordSuggestion]
     bullet_suggestions: List[BulletSuggestion]
     structure_suggestions: List[StructureSuggestion]
+    remaining_calls: Optional[int] = None
 
 class OptimizeResponse(BaseModel):
     extracted_resume: ResumeContent
@@ -83,6 +85,7 @@ class OptimizeResponse(BaseModel):
     keyword_suggestions: List[KeywordSuggestion]
     bullet_suggestions: List[BulletSuggestion]
     structure_suggestions: List[StructureSuggestion]
+    remaining_calls: Optional[int] = None
 
 class SuggestRequest(BaseModel):
     resume: ResumeContent
@@ -98,3 +101,4 @@ class CoverLetterResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: str
+    remaining_calls: Optional[int] = None

@@ -6,6 +6,8 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 import json
 import os
+import time
+from collections import defaultdict
 from dotenv import load_dotenv
 
 from models import (
@@ -51,6 +53,23 @@ def get_client_ip(request: Request) -> str:
             return forwarded_for.split(",")[0].strip()
     return get_remote_address(request)
 
+# Rate limit tracking
+analysis_calls = defaultdict(list)
+def parse_rate_limit(limit_str):
+    if not limit_str: return 10
+    return int(limit_str.split('/')[0])
+
+MAX_ANALYSES_PER_HOUR = parse_rate_limit(os.getenv("EXTRACT_RATE_LIMIT", "10/hour"))
+
+def get_remaining_analyses(client_ip: str) -> int:
+    current_time = time.time()
+    one_hour_ago = current_time - 3600
+    analysis_calls[client_ip] = [ts for ts in analysis_calls[client_ip] if ts > one_hour_ago]
+    return max(0, MAX_ANALYSES_PER_HOUR - len(analysis_calls[client_ip]))
+
+def record_analysis(client_ip: str):
+    analysis_calls[client_ip].append(time.time())
+
 limiter = Limiter(key_func=get_client_ip)
 app.state.limiter = limiter
 
@@ -58,7 +77,7 @@ app.state.limiter = limiter
 async def custom_rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse(
         status_code=429,
-        content={"error": "You've hit the demo's request limit — try again later."}
+        content={"error": "You've hit the demo's request limit — try again later.", "remaining_calls": 0}
     )
 
 @app.get("/api/config")
@@ -160,7 +179,9 @@ async def extract_resume(
 
     try:
         extracted_resume_dict, _ = await _extract_internal(resume_file, api_key)
-        return ResumeContent(**extracted_resume_dict)
+        extracted_data = extracted_resume_dict
+        extracted_data["remaining_calls"] = get_remaining_analyses(get_client_ip(request))
+        return ResumeContent(**extracted_data)
     except ValueError as e:
         return JSONResponse(status_code=400, content={"error": str(e)})
     except Exception as e:
@@ -181,9 +202,19 @@ async def suggest_resume(
     except HTTPException as e:
         return JSONResponse(status_code=e.status_code, content={"error": e.detail})
 
+    client_ip = get_client_ip(request)
+    record_analysis(client_ip)
+    
     try:
         result = await _suggest_internal(req.resume.model_dump(), req.jd_text, api_key)
-        return SuggestResponse(**result)
+        return SuggestResponse(
+            match_score=result.get("match_score", 0),
+            summary_suggestion=result.get("summary_suggestion"),
+            keyword_suggestions=result.get("keyword_suggestions", []),
+            bullet_suggestions=result.get("bullet_suggestions", []),
+            structure_suggestions=result.get("structure_suggestions", []),
+            remaining_calls=get_remaining_analyses(client_ip)
+        )
     except Exception as e:
         error_msg = str(e)
         status_code = 429 if "rate limit hit" in error_msg.lower() else 400

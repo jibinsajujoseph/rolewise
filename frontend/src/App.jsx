@@ -31,6 +31,7 @@ function App() {
   const [copiedItems, setCopiedItems] = useState({});
   const [expandedKeyword, setExpandedKeyword] = useState(null);
   const [activeModal, setActiveModal] = useState(null);
+  const [rateLimitInfo, setRateLimitInfo] = useState(null);
   
   const fileInputRef = useRef(null);
   const coverLetterRef = useRef(null);
@@ -105,19 +106,24 @@ function App() {
         headers['X-Access-Code'] = accessCode;
       }
 
+      let extractRes = null;
       let currentExtractedResume = extractedResume;
 
       if (!currentExtractedResume) {
         const formData = new FormData();
         formData.append('resume_file', resumeFile);
 
-        const extractRes = await fetch(`${API_URL}/api/extract`, {
+        extractRes = await fetch(`${API_URL}/api/extract`, {
           method: 'POST',
           headers,
           body: formData,
         });
         
         const extractData = await extractRes.json();
+
+        if (extractData && extractData.remaining_calls !== undefined && extractData.remaining_calls !== null) {
+          setRateLimitInfo({ limit: 10, remaining: extractData.remaining_calls });
+        }
         
         if (!extractRes.ok) {
           throw new Error(extractData.error || 'Failed to extract resume content');
@@ -140,6 +146,18 @@ function App() {
       });
       
       const suggestData = await suggestRes.json();
+      
+      const updateRateLimit = (data) => {
+        if (data && data.remaining_calls !== undefined && data.remaining_calls !== null) {
+          // Defaulting limit to 10 for display purposes since we no longer receive it from headers
+          setRateLimitInfo({ limit: 10, remaining: data.remaining_calls });
+        }
+      };
+
+      if (currentExtractedResume && currentExtractedResume.remaining_calls !== undefined) {
+        updateRateLimit(currentExtractedResume);
+      }
+      updateRateLimit(suggestData);
       
       if (!suggestRes.ok) {
         throw new Error(suggestData.error || 'Failed to generate suggestions');
@@ -359,6 +377,11 @@ function App() {
               <div>
                 <p style={{ fontWeight: 600, color: 'var(--primary)' }}>Ready for Analysis</p>
                 <p style={{ fontSize: '14px', color: 'var(--secondary)' }}>Upload both a resume and job description to proceed.</p>
+                {rateLimitInfo && (
+                  <p style={{ fontSize: '12px', color: 'var(--tertiary)', marginTop: '4px' }}>
+                    {rateLimitInfo.remaining} of {rateLimitInfo.limit} analyses left this hour
+                  </p>
+                )}
               </div>
               <button 
                 className="btn btn-primary"
