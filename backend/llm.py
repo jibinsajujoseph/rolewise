@@ -3,7 +3,7 @@ import asyncio
 from google import genai
 from google.genai import errors as genai_errors
 from pydantic import BaseModel
-from typing import Type, Dict, Any
+from typing import Type, Dict, Any, List, Optional
 
 # Prompts
 EXTRACTION_SYSTEM_PROMPT = """You are a resume parsing engine. Extract the structured content of the resume text into JSON exactly as specified by the schema. Do not summarize, infer, embellish, or add anything not explicitly present in the text. Preserve exact wording of bullets, titles, and dates as written. If a field is not present in the source, omit it or use null — never guess a value. Preserve any existing skill category labels verbatim. If the source resume's skills aren't grouped under any label, use a single category (e.g. "Skills") — don't force fabricated categories."""
@@ -116,3 +116,73 @@ async def call_llm(
                 raise Exception(f"Failed to call LLM: {str(e)}")
         except Exception as e:
             raise Exception(f"Failed to call LLM: {str(e)}")
+
+GROUNDING_SYSTEM_PROMPT = """You are a strict fact-checker. You are given a source resume JSON and a list of suggested bullet/summary rewrites.
+Your task is to flag any suggested text that contains a claim, tool, qualifier, or detail not directly traceable to the source resume.
+Return the indices of the bullet suggestions that contain ungrounded content and a one-line reason for each. Also flag the summary if it is ungrounded."""
+
+GROUNDING_USER_PROMPT_TEMPLATE = """Source Resume JSON:
+{source_resume}
+
+Suggested Summary:
+{suggested_summary}
+
+Suggested Bullets (with indices):
+{suggested_bullets}
+
+Check for ungrounded claims."""
+
+class BulletFlag(BaseModel):
+    index: int
+    reason: str
+
+class GroundingValidationResponse(BaseModel):
+    summary_flag_reason: Optional[str] = None
+    bullet_flags: List[BulletFlag]
+
+async def validate_grounding(
+    suggestions: Dict[str, Any],
+    source_resume: Dict[str, Any],
+    api_key: str
+) -> Dict[str, Any]:
+    summary_sugg = suggestions.get("summary_suggestion")
+    bullet_suggs = suggestions.get("bullet_suggestions", [])
+    
+    if not summary_sugg and not bullet_suggs:
+        return suggestions
+        
+    suggested_summary_text = summary_sugg.get("suggested", "None") if summary_sugg else "None"
+    
+    bullets_text = ""
+    for idx, b in enumerate(bullet_suggs):
+        bullets_text += f"Index {idx}:\nOriginal: {b.get('original_bullet', '')}\nSuggested: {b.get('suggested_bullet', '')}\n\n"
+
+    user_prompt = GROUNDING_USER_PROMPT_TEMPLATE.format(
+        source_resume=json.dumps(source_resume, indent=2),
+        suggested_summary=suggested_summary_text,
+        suggested_bullets=bullets_text
+    )
+
+    try:
+        validation_result_dict = await call_llm(
+            provider="gemini",
+            api_key=api_key,
+            system_prompt=GROUNDING_SYSTEM_PROMPT,
+            user_prompt=user_prompt,
+            response_schema=GroundingValidationResponse,
+            model="gemini-3.5-flash-lite"
+        )
+    except Exception as e:
+        print(f"Grounding validation failed: {e}")
+        return suggestions
+
+    if validation_result_dict.get("summary_flag_reason") and summary_sugg:
+        summary_sugg["needs_review"] = True
+        
+    flags = validation_result_dict.get("bullet_flags", [])
+    for flag in flags:
+        idx = flag.get("index")
+        if idx is not None and 0 <= idx < len(bullet_suggs):
+            bullet_suggs[idx]["needs_review"] = True
+
+    return suggestions

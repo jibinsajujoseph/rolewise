@@ -334,7 +334,14 @@ function App() {
                {summarySuggestion && (
                  <div className="card">
                     <div className="flex justify-between items-start mb-4">
-                      <label className="label mb-0" style={{ fontSize: '16px', color: 'var(--primary)' }}>Summary Suggestion</label>
+                      <label className="label mb-0" style={{ fontSize: '16px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        Summary Suggestion
+                        {summarySuggestion.needs_review && (
+                          <span title="This suggestion may contain unverified claims. Please review carefully." style={{ color: '#f59e0b', cursor: 'help', display: 'flex' }}>
+                            <AlertCircle size={16} />
+                          </span>
+                        )}
+                      </label>
                       <button className="btn btn-secondary" onClick={() => handleCopyItem(summarySuggestion.suggested, 'summary')} style={{ padding: '6px 12px' }}>
                         {copiedItems['summary'] ? <CheckCircle2 size={14} /> : <Copy size={14} />} {copiedItems['summary'] ? 'Copied' : 'Copy'}
                       </button>
@@ -418,6 +425,12 @@ function App() {
                                       bullet.suggested_bullet
                                     )}
                                   </span>
+                                  {bullet.needs_review && (
+                                    <div style={{ marginTop: '8px', fontSize: '12px', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                      <AlertCircle size={14} />
+                                      <span>May contain unverified claims. Review carefully.</span>
+                                    </div>
+                                  )}
                                 </div>
                                 <p style={{ fontSize: '13px', color: 'var(--secondary)' }}><strong>Why:</strong> {bullet.reason}</p>
                                 <button className="btn btn-secondary absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handleCopyItem(bullet.suggested_bullet, `bullet-${section}-${bIdx}`)} style={{ padding: '4px 8px', fontSize: '12px', backgroundColor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>

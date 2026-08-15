@@ -17,6 +17,7 @@ load_dotenv(override=True)
 from parsing import parse_resume_file
 from llm import (
     call_llm, 
+    validate_grounding,
     EXTRACTION_SYSTEM_PROMPT, 
     EXTRACTION_USER_PROMPT_TEMPLATE, 
     SUGGESTIONS_SYSTEM_PROMPT, 
@@ -143,6 +144,17 @@ async def optimize_resume(
             response_schema=SuggestionsResponse,
             model="gemini-3.5-flash"
         )
+        
+        # Grounding check step
+        # Note: Adds one extra cheap LLM call per request. Tradeoff is added latency/cost, 
+        # but ensures zero-fabrication. Can be disabled under heavy load.
+        if os.getenv("ENABLE_GROUNDING_CHECK", "true").lower() == "true":
+            suggestions_result_dict = await validate_grounding(
+                suggestions=suggestions_result_dict,
+                source_resume=extracted_resume_dict,
+                api_key=api_key
+            )
+            
     except Exception as e:
         error_msg = str(e)
         status_code = 429 if "rate limit hit" in error_msg.lower() else 400

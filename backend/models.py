@@ -50,12 +50,14 @@ class SummarySuggestion(BaseModel):
     original: Optional[str] = None
     suggested: str
     rationale: str
+    needs_review: Optional[bool] = False
 
 class BulletSuggestion(BaseModel):
     section: str          # e.g. "Experience: AI Engineer at Akumen" or "Project: InboxIQ"
     original_bullet: str
     suggested_bullet: str
     reason: str           # e.g. "Adds quantifiable metric", "Surfaces required keyword 'RAG'"
+    needs_review: Optional[bool] = False
 
 class StructureSuggestion(BaseModel):
     title: str
