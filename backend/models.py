@@ -71,6 +71,7 @@ class SuggestionsResponse(BaseModel):
 
 class OptimizeResponse(BaseModel):
     extracted_resume: ResumeContent
+    match_score: int
     summary_suggestion: Optional[SummarySuggestion] = None
     keyword_suggestions: List[KeywordSuggestion]
     bullet_suggestions: List[BulletSuggestion]

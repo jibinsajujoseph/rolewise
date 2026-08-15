@@ -18,6 +18,7 @@ function App() {
   const [error, setError] = useState('');
   
   const [extractedResume, setExtractedResume] = useState(null);
+  const [matchScore, setMatchScore] = useState(0);
   const [summarySuggestion, setSummarySuggestion] = useState(null);
   const [keywordSuggestions, setKeywordSuggestions] = useState([]);
   const [bulletSuggestions, setBulletSuggestions] = useState([]);
@@ -109,6 +110,7 @@ function App() {
       }
       
       setExtractedResume(data.extracted_resume);
+      setMatchScore(data.match_score || 0);
       setSummarySuggestion(data.summary_suggestion);
       setKeywordSuggestions(data.keyword_suggestions || []);
       setBulletSuggestions(data.bullet_suggestions || []);
@@ -165,6 +167,7 @@ function App() {
   const resetFlow = () => {
     setStep(1);
     setExtractedResume(null);
+    setMatchScore(0);
     setSummarySuggestion(null);
     setKeywordSuggestions([]);
     setBulletSuggestions([]);
@@ -331,6 +334,21 @@ function App() {
 
             <div className="suggestions-layout flex flex-col gap-6 max-w-4xl mx-auto w-full">
                
+               <div className="card text-center mb-2" style={{ padding: '32px' }}>
+                 <div style={{
+                   fontSize: '56px',
+                   fontWeight: '800',
+                   color: matchScore < 50 ? '#be123c' : matchScore <= 75 ? '#d97706' : '#16a34a',
+                   lineHeight: '1',
+                   marginBottom: '12px'
+                 }}>
+                   {matchScore}%
+                 </div>
+                 <div style={{ fontSize: '18px', fontWeight: '600', color: 'var(--primary)' }}>
+                   Keyword Match
+                 </div>
+               </div>
+
                {summarySuggestion && (
                  <div className="card">
                     <div className="flex justify-between items-start mb-4">

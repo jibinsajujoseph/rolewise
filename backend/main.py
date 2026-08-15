@@ -169,8 +169,13 @@ async def optimize_resume(
     for kw in keyword_suggestions:
         kw["present"] = kw["keyword"] not in missing_keywords
 
+    total_keywords = len(keyword_suggestions)
+    present_keywords = sum(1 for kw in keyword_suggestions if kw["present"])
+    match_score = int((present_keywords / total_keywords) * 100) if total_keywords > 0 else 0
+
     return OptimizeResponse(
         extracted_resume=extracted_resume_dict,
+        match_score=match_score,
         summary_suggestion=suggestions_result_dict.get("summary_suggestion"),
         keyword_suggestions=keyword_suggestions,
         bullet_suggestions=suggestions_result_dict.get("bullet_suggestions", []),
