@@ -12,11 +12,13 @@ from dotenv import load_dotenv
 
 from models import (
     ResumeContent, SuggestionsResponse, OptimizeResponse, ErrorResponse,
-    CoverLetterRequest, CoverLetterResponse, SuggestRequest, SuggestResponse
+    CoverLetterRequest, CoverLetterResponse, SuggestRequest, SuggestResponse,
+    BuildResumeRequest
 )
 
 load_dotenv(override=True)
 from parsing import parse_resume_file
+from docx_generator import generate_resume_docx
 from llm import (
     call_llm, 
     validate_grounding,
@@ -289,3 +291,22 @@ async def generate_cover_letter(
         status_code = 429 if "rate limit hit" in error_msg.lower() else 400
         return JSONResponse(status_code=status_code, content={"error": error_msg})
     return CoverLetterResponse(**result)
+
+@app.post("/api/build-resume", responses={400: {"model": ErrorResponse}})
+async def build_resume(
+    request: Request,
+    req: BuildResumeRequest
+):
+    try:
+        docx_buffer = generate_resume_docx(
+            resume=req.resume,
+            accepted_summary=req.accepted_summary,
+            accepted_bullets=req.accepted_bullets
+        )
+        return Response(
+            content=docx_buffer.getvalue(),
+            media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            headers={"Content-Disposition": "attachment; filename=Optimized_Resume.docx"}
+        )
+    except Exception as e:
+        return JSONResponse(status_code=400, content={"error": str(e)})

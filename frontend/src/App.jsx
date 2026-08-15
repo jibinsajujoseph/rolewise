@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { UploadCloud, FileText, CheckCircle2, Copy, AlertCircle, Loader2, ArrowRight, Check, Download, FileDown } from 'lucide-react';
+import { UploadCloud, FileText, CheckCircle2, Copy, AlertCircle, Loader2, ArrowRight, Check, Download, FileDown, X } from 'lucide-react';
 import './index.css';
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -32,7 +32,8 @@ function App() {
   const [expandedKeyword, setExpandedKeyword] = useState(null);
   const [activeModal, setActiveModal] = useState(null);
   const [rateLimitInfo, setRateLimitInfo] = useState(null);
-  
+  const [acceptedSuggestions, setAcceptedSuggestions] = useState({ summary: null, keywords: {}, bullets: {} });
+  const [isBuildingResume, setIsBuildingResume] = useState(false);
   const fileInputRef = useRef(null);
   const coverLetterRef = useRef(null);
 
@@ -180,6 +181,59 @@ function App() {
 
 
 
+  const handleToggleAccept = (type, id, value) => {
+    setAcceptedSuggestions(prev => {
+      const newState = { ...prev };
+      if (type === 'summary') {
+        newState.summary = prev.summary === value ? null : value;
+      } else if (type === 'keywords' || type === 'bullets') {
+        newState[type] = { ...prev[type] };
+        newState[type][id] = prev[type][id] === value ? null : value;
+      }
+      return newState;
+    });
+  };
+
+  const handleBuildResume = async () => {
+    setIsBuildingResume(true);
+    try {
+      const acceptedBullets = {};
+      Object.entries(acceptedSuggestions.bullets).forEach(([original, isAccepted]) => {
+        if (isAccepted) {
+          const suggestion = bulletSuggestions.find(b => b.original_bullet === original);
+          if (suggestion) acceptedBullets[original] = suggestion.suggested_bullet;
+        }
+      });
+      
+      const response = await fetch(`${API_URL}/api/build-resume`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          resume: extractedResume,
+          accepted_summary: acceptedSuggestions.summary === true ? summarySuggestion.suggested : null,
+          accepted_bullets: acceptedBullets
+        })
+      });
+      
+      if (!response.ok) throw new Error('Failed to build resume');
+      
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'Optimized_Resume.docx';
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      a.remove();
+    } catch (err) {
+      console.error(err);
+      alert('Error building resume: ' + err.message);
+    } finally {
+      setIsBuildingResume(false);
+    }
+  };
+
   const handleCopyItem = async (text, id) => {
     if (text) {
       await navigator.clipboard.writeText(text);
@@ -237,6 +291,7 @@ function App() {
     setCoverLetterVariants(null);
     setCoverLetterError('');
     setExpandedKeyword(null);
+    setAcceptedSuggestions({ summary: null, keywords: {}, bullets: {} });
   };
 
   const tryAnotherJD = () => {
@@ -250,6 +305,7 @@ function App() {
     setCoverLetterVariants(null);
     setCoverLetterError('');
     setExpandedKeyword(null);
+    setAcceptedSuggestions({ summary: null, keywords: {}, bullets: {} });
   };
 
   return (
@@ -410,9 +466,17 @@ function App() {
               <div className="flex items-center gap-2 cursor-pointer" onClick={resetFlow} style={{ color: 'var(--secondary)' }}>
                  <ArrowRight size={16} style={{ transform: 'rotate(180deg)' }}/> Start Over
               </div>
-              <button className="btn btn-secondary" onClick={tryAnotherJD} style={{ padding: '8px 16px' }}>
-                Try Another JD
-              </button>
+              <div className="flex gap-4">
+                {(acceptedSuggestions.summary === true || Object.values(acceptedSuggestions.bullets).some(v => v === true) || Object.values(acceptedSuggestions.keywords).some(v => v === true)) && (
+                  <button className="btn btn-primary" onClick={handleBuildResume} disabled={isBuildingResume} style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {isBuildingResume ? <Loader2 size={16} className="animate-spin" /> : <FileDown size={16} />}
+                    Build Resume
+                  </button>
+                )}
+                <button className="btn btn-secondary" onClick={tryAnotherJD} style={{ padding: '8px 16px' }}>
+                  Try Another JD
+                </button>
+              </div>
             </div>
 
             <div className="suggestions-layout flex flex-col gap-6 max-w-4xl mx-auto w-full">
@@ -443,9 +507,25 @@ function App() {
                           </span>
                         )}
                       </label>
-                      <button className="btn btn-secondary" onClick={() => handleCopyItem(summarySuggestion.suggested, 'summary')} style={{ padding: '6px 12px' }}>
-                        {copiedItems['summary'] ? <CheckCircle2 size={14} /> : <Copy size={14} />} {copiedItems['summary'] ? 'Copied' : 'Copy'}
-                      </button>
+                      <div className="flex gap-2">
+                        <button 
+                          className="btn btn-secondary" 
+                          onClick={() => handleToggleAccept('summary', 'summary', true)} 
+                          style={{ padding: '6px 12px', backgroundColor: acceptedSuggestions.summary === true ? '#f0fdf4' : '', borderColor: acceptedSuggestions.summary === true ? '#16a34a' : '', color: acceptedSuggestions.summary === true ? '#16a34a' : '' }}
+                        >
+                          <Check size={14} /> Accept
+                        </button>
+                        <button 
+                          className="btn btn-secondary" 
+                          onClick={() => handleToggleAccept('summary', 'summary', false)} 
+                          style={{ padding: '6px 12px', backgroundColor: acceptedSuggestions.summary === false ? '#fef2f2' : '', borderColor: acceptedSuggestions.summary === false ? '#dc2626' : '', color: acceptedSuggestions.summary === false ? '#dc2626' : '' }}
+                        >
+                          <X size={14} /> Reject
+                        </button>
+                        <button className="btn btn-secondary" onClick={() => handleCopyItem(summarySuggestion.suggested, 'summary')} style={{ padding: '6px 12px' }}>
+                          {copiedItems['summary'] ? <CheckCircle2 size={14} /> : <Copy size={14} />} {copiedItems['summary'] ? 'Copied' : 'Copy'}
+                        </button>
+                      </div>
                     </div>
                     {summarySuggestion.original && (
                       <div className="diff-old mb-2">{summarySuggestion.original}</div>
@@ -488,9 +568,27 @@ function App() {
                                 ({keywordSuggestions[expandedKeyword].importance}, {keywordSuggestions[expandedKeyword].present ? 'Present' : 'Missing'})
                               </span>
                             </div>
-                            <button className="btn btn-secondary" onClick={() => handleCopyItem(keywordSuggestions[expandedKeyword].suggestion, `kw-${expandedKeyword}`)} style={{ padding: '4px 8px', fontSize: '12px' }}>
-                              {copiedItems[`kw-${expandedKeyword}`] ? <CheckCircle2 size={12} /> : <Copy size={12} />} {copiedItems[`kw-${expandedKeyword}`] ? 'Copied' : 'Copy'}
-                            </button>
+                            <div className="flex gap-2">
+                              <button 
+                                className="btn btn-secondary" 
+                                onClick={() => handleToggleAccept('keywords', expandedKeyword, true)} 
+                                style={{ padding: '4px 8px', fontSize: '12px', backgroundColor: acceptedSuggestions.keywords[expandedKeyword] === true ? '#f0fdf4' : '', borderColor: acceptedSuggestions.keywords[expandedKeyword] === true ? '#16a34a' : '', color: acceptedSuggestions.keywords[expandedKeyword] === true ? '#16a34a' : '' }}
+                                title="Accept"
+                              >
+                                <Check size={12} />
+                              </button>
+                              <button 
+                                className="btn btn-secondary" 
+                                onClick={() => handleToggleAccept('keywords', expandedKeyword, false)} 
+                                style={{ padding: '4px 8px', fontSize: '12px', backgroundColor: acceptedSuggestions.keywords[expandedKeyword] === false ? '#fef2f2' : '', borderColor: acceptedSuggestions.keywords[expandedKeyword] === false ? '#dc2626' : '', color: acceptedSuggestions.keywords[expandedKeyword] === false ? '#dc2626' : '' }}
+                                title="Reject"
+                              >
+                                <X size={12} />
+                              </button>
+                              <button className="btn btn-secondary" onClick={() => handleCopyItem(keywordSuggestions[expandedKeyword].suggestion, `kw-${expandedKeyword}`)} style={{ padding: '4px 8px', fontSize: '12px' }} title="Copy">
+                                {copiedItems[`kw-${expandedKeyword}`] ? <CheckCircle2 size={12} /> : <Copy size={12} />}
+                              </button>
+                            </div>
                           </div>
                           <p style={{ fontSize: '14px', color: 'var(--on-surface)' }}>{keywordSuggestions[expandedKeyword].suggestion}</p>
                         </div>
@@ -534,9 +632,33 @@ function App() {
                                   )}
                                 </div>
                                 <p style={{ fontSize: '13px', color: 'var(--secondary)' }}><strong>Why:</strong> {bullet.reason}</p>
-                                <button className="btn btn-secondary absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handleCopyItem(bullet.suggested_bullet, `bullet-${section}-${bIdx}`)} style={{ padding: '4px 8px', fontSize: '12px', backgroundColor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
-                                  {copiedItems[`bullet-${section}-${bIdx}`] ? <CheckCircle2 size={12} /> : <Copy size={12} />} {copiedItems[`bullet-${section}-${bIdx}`] ? 'Copied' : 'Copy'}
-                                </button>
+                                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2" style={{ backgroundColor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.1)', padding: '4px', borderRadius: '6px' }}>
+                                  <button 
+                                    className="btn btn-secondary" 
+                                    onClick={() => handleToggleAccept('bullets', bullet.original_bullet, true)} 
+                                    style={{ padding: '4px 8px', fontSize: '12px', border: 'none', backgroundColor: acceptedSuggestions.bullets[bullet.original_bullet] === true ? '#f0fdf4' : 'transparent', color: acceptedSuggestions.bullets[bullet.original_bullet] === true ? '#16a34a' : 'var(--secondary)' }}
+                                    title="Accept"
+                                  >
+                                    <Check size={14} />
+                                  </button>
+                                  <button 
+                                    className="btn btn-secondary" 
+                                    onClick={() => handleToggleAccept('bullets', bullet.original_bullet, false)} 
+                                    style={{ padding: '4px 8px', fontSize: '12px', border: 'none', backgroundColor: acceptedSuggestions.bullets[bullet.original_bullet] === false ? '#fef2f2' : 'transparent', color: acceptedSuggestions.bullets[bullet.original_bullet] === false ? '#dc2626' : 'var(--secondary)' }}
+                                    title="Reject"
+                                  >
+                                    <X size={14} />
+                                  </button>
+                                  <div style={{ width: '1px', backgroundColor: 'var(--outline)', margin: '4px 0' }}></div>
+                                  <button 
+                                    className="btn btn-secondary" 
+                                    onClick={() => handleCopyItem(bullet.suggested_bullet, `bullet-${section}-${bIdx}`)} 
+                                    style={{ padding: '4px 8px', fontSize: '12px', border: 'none' }}
+                                    title="Copy"
+                                  >
+                                    {copiedItems[`bullet-${section}-${bIdx}`] ? <CheckCircle2 size={14} /> : <Copy size={14} />}
+                                  </button>
+                                </div>
                               </div>
                             ))}
                           </div>

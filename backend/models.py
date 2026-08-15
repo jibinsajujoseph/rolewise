@@ -102,3 +102,8 @@ class CoverLetterResponse(BaseModel):
 class ErrorResponse(BaseModel):
     error: str
     remaining_calls: Optional[int] = None
+
+class BuildResumeRequest(BaseModel):
+    resume: ResumeContent
+    accepted_summary: Optional[str] = None
+    accepted_bullets: dict[str, str] = {}
