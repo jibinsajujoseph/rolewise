@@ -60,7 +60,7 @@ Target job description:
 
 Write the cover letter."""
 
-MODEL_NAME = "gemini-3.5-flash"
+MODEL_NAME = "gemini-3.5-flash-lite"
 
 async def call_llm(
     provider: str,
