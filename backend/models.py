@@ -39,6 +39,7 @@ class ResumeContent(BaseModel):
     education: List[Education]
     projects: List[Project]
     certifications: List[str]
+    remaining_calls: Optional[int] = None
 
 class KeywordSuggestion(BaseModel):
     keyword: str
@@ -69,6 +70,14 @@ class SuggestionsResponse(BaseModel):
     bullet_suggestions: List[BulletSuggestion]
     structure_suggestions: List[StructureSuggestion]
 
+class SuggestResponse(BaseModel):
+    match_score: int
+    summary_suggestion: Optional[SummarySuggestion] = None
+    keyword_suggestions: List[KeywordSuggestion]
+    bullet_suggestions: List[BulletSuggestion]
+    structure_suggestions: List[StructureSuggestion]
+    remaining_calls: Optional[int] = None
+
 class OptimizeResponse(BaseModel):
     extracted_resume: ResumeContent
     match_score: int
@@ -76,6 +85,11 @@ class OptimizeResponse(BaseModel):
     keyword_suggestions: List[KeywordSuggestion]
     bullet_suggestions: List[BulletSuggestion]
     structure_suggestions: List[StructureSuggestion]
+    remaining_calls: Optional[int] = None
+
+class SuggestRequest(BaseModel):
+    resume: ResumeContent
+    jd_text: str
 
 class CoverLetterRequest(BaseModel):
     resume: ResumeContent
@@ -87,3 +101,9 @@ class CoverLetterResponse(BaseModel):
 
 class ErrorResponse(BaseModel):
     error: str
+    remaining_calls: Optional[int] = None
+
+class BuildResumeRequest(BaseModel):
+    resume: ResumeContent
+    accepted_summary: Optional[str] = None
+    accepted_bullets: dict[str, str] = {}
