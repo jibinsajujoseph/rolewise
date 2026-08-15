@@ -209,6 +209,21 @@ function App() {
     }
     setStep(1);
     setJdText('');
+    setExtractedResume(null);
+    setResumeFile(null);
+    setMatchScore(0);
+    setSummarySuggestion(null);
+    setKeywordSuggestions([]);
+    setBulletSuggestions([]);
+    setStructureSuggestions([]);
+    setCoverLetterVariants(null);
+    setCoverLetterError('');
+    setExpandedKeyword(null);
+  };
+
+  const tryAnotherJD = () => {
+    setStep(3);
+    setJdText('');
     setMatchScore(0);
     setSummarySuggestion(null);
     setKeywordSuggestions([]);
@@ -370,8 +385,11 @@ function App() {
           <div className="step-container">
             <div className="mb-6 flex justify-between items-center">
               <div className="flex items-center gap-2 cursor-pointer" onClick={resetFlow} style={{ color: 'var(--secondary)' }}>
-                 <ArrowRight size={16} style={{ transform: 'rotate(180deg)' }}/> Back
+                 <ArrowRight size={16} style={{ transform: 'rotate(180deg)' }}/> Start Over
               </div>
+              <button className="btn btn-secondary" onClick={tryAnotherJD} style={{ padding: '8px 16px' }}>
+                Try Another JD
+              </button>
             </div>
 
             <div className="suggestions-layout flex flex-col gap-6 max-w-4xl mx-auto w-full">
@@ -587,6 +605,58 @@ function App() {
 
             </div>
 
+          </div>
+        )}
+
+        {step === 3 && (
+          <div className="step-container">
+            <div className="text-center mb-6">
+              <h1 className="mb-2">New Target Role</h1>
+              <p style={{ color: 'var(--secondary)', maxWidth: '600px', margin: '0 auto' }}>
+                Your resume is already analyzed. Paste a new job description to generate fresh insights instantly.
+              </p>
+            </div>
+            
+            <div className="card max-w-4xl mx-auto flex flex-col" style={{ minHeight: '300px' }}>
+              <label className="label mb-4" style={{ fontSize: '16px', color: 'var(--primary)' }}>Target Job Description</label>
+              <textarea
+                className="textarea flex-grow"
+                placeholder="Paste the full job description here..."
+                value={jdText}
+                onChange={(e) => setJdText(e.target.value)}
+              />
+            </div>
+
+            {error && (
+              <div className="error-text justify-center mt-6 max-w-4xl mx-auto">
+                <AlertCircle size={18} />
+                {error}
+              </div>
+            )}
+
+            <div className="action-bar mt-6 card flex justify-between items-center max-w-4xl mx-auto" style={{ backgroundColor: 'var(--surface-container-low)' }}>
+              <div>
+                <p style={{ fontWeight: 600, color: 'var(--primary)' }}>Ready for Analysis</p>
+                <p style={{ fontSize: '14px', color: 'var(--secondary)' }}>Generate new suggestions instantly without re-uploading.</p>
+              </div>
+              <button 
+                className="btn btn-primary"
+                style={{ padding: '12px 24px' }}
+                disabled={!((!requiresApiKey || apiKey.trim()) && (!requiresAccessCode || accessCode.trim()) && jdText.trim() && !isLoading)}
+                onClick={handleOptimize}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 size={18} className="animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    Generate Insights <ArrowRight size={18} />
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         )}
       </main>
