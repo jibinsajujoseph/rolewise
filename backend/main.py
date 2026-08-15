@@ -133,12 +133,15 @@ async def optimize_resume(
             jd_text=jd_text
         )
         
+        # Upgrading from lite to flash for better reasoning and strict adherence to no-fabrication rules,
+        # accepting a cost/latency tradeoff compared to the extraction step.
         suggestions_result_dict = await call_llm(
             provider="gemini",
             api_key=api_key,
             system_prompt=SUGGESTIONS_SYSTEM_PROMPT,
             user_prompt=suggestions_user_prompt,
-            response_schema=SuggestionsResponse
+            response_schema=SuggestionsResponse,
+            model="gemini-3.5-flash"
         )
     except Exception as e:
         error_msg = str(e)
@@ -182,12 +185,15 @@ async def generate_cover_letter(
             resume_json=json.dumps(req.resume.model_dump(), indent=2),
             jd_text=req.jd_text,
         )
+        # Upgrading from lite to flash for better prose and strict adherence to no-fabrication rules,
+        # accepting a cost/latency tradeoff compared to the extraction step.
         result = await call_llm(
             provider="gemini",
             api_key=api_key,
             system_prompt=COVER_LETTER_SYSTEM_PROMPT,
             user_prompt=prompt,
             response_schema=CoverLetterResponse,
+            model="gemini-3.5-flash"
         )
     except Exception as e:
         error_msg = str(e)

@@ -81,6 +81,7 @@ async def call_llm(
     system_prompt: str,
     user_prompt: str,
     response_schema: Type[BaseModel],
+    model: str = MODEL_NAME,
 ) -> Dict[str, Any]:
     """
     Adapter function to call an LLM (currently Gemini only) with retries.
@@ -95,7 +96,7 @@ async def call_llm(
     for i in range(len(retries) + 1):
         try:
             response = await client.aio.models.generate_content(
-                model=MODEL_NAME,
+                model=model,
                 contents=user_prompt,
                 config={
                     "system_instruction": system_prompt,
