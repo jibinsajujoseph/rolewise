@@ -69,6 +69,13 @@ class SuggestionsResponse(BaseModel):
     bullet_suggestions: List[BulletSuggestion]
     structure_suggestions: List[StructureSuggestion]
 
+class SuggestResponse(BaseModel):
+    match_score: int
+    summary_suggestion: Optional[SummarySuggestion] = None
+    keyword_suggestions: List[KeywordSuggestion]
+    bullet_suggestions: List[BulletSuggestion]
+    structure_suggestions: List[StructureSuggestion]
+
 class OptimizeResponse(BaseModel):
     extracted_resume: ResumeContent
     match_score: int
@@ -76,6 +83,10 @@ class OptimizeResponse(BaseModel):
     keyword_suggestions: List[KeywordSuggestion]
     bullet_suggestions: List[BulletSuggestion]
     structure_suggestions: List[StructureSuggestion]
+
+class SuggestRequest(BaseModel):
+    resume: ResumeContent
+    jd_text: str
 
 class CoverLetterRequest(BaseModel):
     resume: ResumeContent

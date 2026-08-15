@@ -60,10 +60,12 @@ function App() {
     if (file) {
       if (file.name.endsWith('.pdf') || file.name.endsWith('.docx')) {
         setResumeFile(file);
+        setExtractedResume(null);
         setError('');
       } else {
         setError('Please upload a PDF or DOCX file.');
         setResumeFile(null);
+        setExtractedResume(null);
       }
     }
   };
@@ -95,10 +97,6 @@ function App() {
     setError('');
     
     try {
-      const formData = new FormData();
-      formData.append('resume_file', resumeFile);
-      formData.append('jd_text', jdText);
-      
       const headers = {};
       if (requiresApiKey) {
         headers['X-Gemini-Api-Key'] = apiKey;
@@ -107,24 +105,51 @@ function App() {
         headers['X-Access-Code'] = accessCode;
       }
 
-      const response = await fetch(`${API_URL}/api/optimize`, {
-        method: 'POST',
-        headers,
-        body: formData,
-      });
-      
-      const data = await response.json();
-      
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to optimize resume');
+      let currentExtractedResume = extractedResume;
+
+      if (!currentExtractedResume) {
+        const formData = new FormData();
+        formData.append('resume_file', resumeFile);
+
+        const extractRes = await fetch(`${API_URL}/api/extract`, {
+          method: 'POST',
+          headers,
+          body: formData,
+        });
+        
+        const extractData = await extractRes.json();
+        
+        if (!extractRes.ok) {
+          throw new Error(extractData.error || 'Failed to extract resume content');
+        }
+        
+        currentExtractedResume = extractData;
+        setExtractedResume(currentExtractedResume);
       }
       
-      setExtractedResume(data.extracted_resume);
-      setMatchScore(data.match_score || 0);
-      setSummarySuggestion(data.summary_suggestion);
-      setKeywordSuggestions(data.keyword_suggestions || []);
-      setBulletSuggestions(data.bullet_suggestions || []);
-      setStructureSuggestions(data.structure_suggestions || []);
+      const suggestRes = await fetch(`${API_URL}/api/suggest`, {
+        method: 'POST',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          resume: currentExtractedResume,
+          jd_text: jdText
+        })
+      });
+      
+      const suggestData = await suggestRes.json();
+      
+      if (!suggestRes.ok) {
+        throw new Error(suggestData.error || 'Failed to generate suggestions');
+      }
+      
+      setMatchScore(suggestData.match_score || 0);
+      setSummarySuggestion(suggestData.summary_suggestion);
+      setKeywordSuggestions(suggestData.keyword_suggestions || []);
+      setBulletSuggestions(suggestData.bullet_suggestions || []);
+      setStructureSuggestions(suggestData.structure_suggestions || []);
       setCoverLetterVariants(null);
       setCopiedItems({});
       setStep(2);
@@ -183,7 +208,7 @@ function App() {
       return;
     }
     setStep(1);
-    setExtractedResume(null);
+    setJdText('');
     setMatchScore(0);
     setSummarySuggestion(null);
     setKeywordSuggestions([]);
