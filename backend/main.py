@@ -25,10 +25,14 @@ from keywords import compute_missing_keywords
 
 app = FastAPI()
 
+# Parse CORS origins from environment, defaulting to local frontend
+cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:5173")
+cors_origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
+
 # Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], # For MVP, allow all
+    allow_origins=cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
