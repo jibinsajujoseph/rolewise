@@ -43,7 +43,14 @@ app.add_middleware(
 # Note: If deployed behind a reverse proxy (e.g. nginx), get_remote_address 
 # might return the proxy's IP. The limiter needs the real client IP from 
 # X-Forwarded-For instead of the proxy's IP.
-limiter = Limiter(key_func=get_remote_address)
+def get_client_ip(request: Request) -> str:
+    if os.getenv("TRUST_PROXY", "false").lower() == "true":
+        forwarded_for = request.headers.get("X-Forwarded-For")
+        if forwarded_for:
+            return forwarded_for.split(",")[0].strip()
+    return get_remote_address(request)
+
+limiter = Limiter(key_func=get_client_ip)
 app.state.limiter = limiter
 
 @app.exception_handler(RateLimitExceeded)

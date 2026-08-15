@@ -526,6 +526,7 @@ function App() {
         }
         
         .max-w-3xl { max-width: 48rem; }
+        .max-w-4xl { max-width: 56rem; }
         .mx-auto { margin-left: auto; margin-right: auto; }
         
         @keyframes spin {

@@ -27,10 +27,14 @@ class Project(BaseModel):
     link: Optional[str] = None
     bullets: List[str]
 
+class SkillCategory(BaseModel):
+    category: str
+    items: List[str]
+
 class ResumeContent(BaseModel):
     contact: Contact
     summary: Optional[str] = None
-    skills: List[str]
+    skills: List[SkillCategory]
     experience: List[Experience]
     education: List[Education]
     projects: List[Project]

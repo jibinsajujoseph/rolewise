@@ -20,6 +20,15 @@ def parse_resume_file(filename: str, content: bytes) -> str:
         for para in doc.paragraphs:
             if para.text:
                 text += para.text + "\n"
+                
+        # Word tables are stored separately from paragraphs in the document structure.
+        # We iterate rows and cells to extract text (e.g., from two-column layouts, sidebars)
+        # to ensure no resume content is lost.
+        for table in doc.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    if cell.text:
+                        text += cell.text + "\n"
     else:
         raise ValueError("Unsupported file format. Please upload a PDF or DOCX file.")
     
