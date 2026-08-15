@@ -32,6 +32,14 @@ function App() {
   const [activeModal, setActiveModal] = useState(null);
   
   const fileInputRef = useRef(null);
+  const coverLetterRef = useRef(null);
+
+  useEffect(() => {
+    if (coverLetterRef.current) {
+      coverLetterRef.current.style.height = 'auto';
+      coverLetterRef.current.style.height = coverLetterRef.current.scrollHeight + 'px';
+    }
+  }, [coverLetter]);
 
   useEffect(() => {
     fetch(`${API_URL}/api/config`)
@@ -495,9 +503,21 @@ function App() {
                           {copiedItems['coverLetter'] ? <CheckCircle2 size={14} /> : <Copy size={14} />} {copiedItems['coverLetter'] ? 'Copied' : 'Copy'}
                         </button>
                       </div>
-                      <div className="suggestion-item p-6 whitespace-pre-wrap" style={{ backgroundColor: '#ffffff', fontSize: '14px', lineHeight: '1.6' }}>
-                        {coverLetter}
-                      </div>
+                      <textarea
+                        ref={coverLetterRef}
+                        className="suggestion-item p-6 w-full"
+                        style={{ 
+                          backgroundColor: '#ffffff', 
+                          fontSize: '14px', 
+                          lineHeight: '1.6', 
+                          resize: 'vertical',
+                          overflow: 'hidden',
+                          fontFamily: 'inherit',
+                          minHeight: '200px'
+                        }}
+                        value={coverLetter}
+                        onChange={(e) => setCoverLetter(e.target.value)}
+                      />
                     </div>
                   ) : (
                     <div className="flex flex-col items-center gap-4">
