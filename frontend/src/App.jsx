@@ -8,6 +8,8 @@ function App() {
   const [step, setStep] = useState(1);
   const [apiKey, setApiKey] = useState('');
   const [requiresApiKey, setRequiresApiKey] = useState(true);
+  const [accessCode, setAccessCode] = useState('');
+  const [requiresAccessCode, setRequiresAccessCode] = useState(false);
   const [resumeFile, setResumeFile] = useState(null);
   const [jdText, setJdText] = useState('');
   const [isDragging, setIsDragging] = useState(false);
@@ -34,13 +36,14 @@ function App() {
       .then(res => res.json())
       .then(data => {
         setRequiresApiKey(data.requires_api_key);
+        setRequiresAccessCode(data.requires_access_code);
       })
       .catch(err => {
         console.error("Failed to fetch config:", err);
       });
   }, []);
 
-  const canOptimize = (!requiresApiKey || apiKey.trim()) && resumeFile && jdText.trim() && !isLoading;
+  const canOptimize = (!requiresApiKey || apiKey.trim()) && (!requiresAccessCode || accessCode.trim()) && resumeFile && jdText.trim() && !isLoading;
 
   const processFile = (file) => {
     if (file) {
@@ -89,6 +92,9 @@ function App() {
       if (requiresApiKey) {
         headers['X-Gemini-Api-Key'] = apiKey;
       }
+      if (requiresAccessCode) {
+        headers['X-Access-Code'] = accessCode;
+      }
 
       const response = await fetch(`${API_URL}/api/optimize`, {
         method: 'POST',
@@ -134,6 +140,9 @@ function App() {
       const headers = { 'Content-Type': 'application/json' };
       if (requiresApiKey) {
         headers['X-Gemini-Api-Key'] = apiKey;
+      }
+      if (requiresAccessCode) {
+        headers['X-Access-Code'] = accessCode;
       }
       const response = await fetch(`${API_URL}/api/cover-letter`, {
         method: 'POST',
@@ -191,19 +200,37 @@ function App() {
               </p>
             </div>
 
-            {requiresApiKey && (
+            {(requiresApiKey || requiresAccessCode) && (
               <div className="card mb-6 max-w-3xl mx-auto">
                 <label className="label">Configuration</label>
-                <input
-                  type="password"
-                  className="input"
-                  placeholder="Enter your Gemini API key"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                />
-                <p style={{ fontSize: '12px', color: 'var(--secondary)', marginTop: '8px' }}>
-                  Your key is never stored and only used for this session. Alternatively, configure GEMINI_API_KEY on the server.
-                </p>
+                {requiresApiKey && (
+                  <div style={{ marginBottom: requiresAccessCode ? '12px' : '0' }}>
+                    <input
+                      type="password"
+                      className="input"
+                      placeholder="Enter your Gemini API key"
+                      value={apiKey}
+                      onChange={(e) => setApiKey(e.target.value)}
+                    />
+                    <p style={{ fontSize: '12px', color: 'var(--secondary)', marginTop: '8px' }}>
+                      Your key is never stored and only used for this session. Alternatively, configure GEMINI_API_KEY on the server.
+                    </p>
+                  </div>
+                )}
+                {requiresAccessCode && (
+                  <div>
+                    <input
+                      type="password"
+                      className="input"
+                      placeholder="Enter demo access code"
+                      value={accessCode}
+                      onChange={(e) => setAccessCode(e.target.value)}
+                    />
+                    <p style={{ fontSize: '12px', color: 'var(--secondary)', marginTop: '8px' }}>
+                      This demo requires an access code.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
 

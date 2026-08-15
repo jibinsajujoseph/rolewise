@@ -1,6 +1,9 @@
-from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Response
+from fastapi import FastAPI, UploadFile, File, Form, Header, HTTPException, Response, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
 import json
 import os
 from dotenv import load_dotenv
@@ -25,11 +28,10 @@ from keywords import compute_missing_keywords
 
 app = FastAPI()
 
-# Parse CORS origins from environment, defaulting to local frontend
+# Enable CORS for frontend
 cors_origins_str = os.getenv("CORS_ORIGINS", "http://localhost:5173")
 cors_origins = [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
 
-# Enable CORS for frontend
 app.add_middleware(
     CORSMiddleware,
     allow_origins=cors_origins,
@@ -38,22 +40,43 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Note: If deployed behind a reverse proxy (e.g. nginx), get_remote_address 
+# might return the proxy's IP. The limiter needs the real client IP from 
+# X-Forwarded-For instead of the proxy's IP.
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
 
+@app.exception_handler(RateLimitExceeded)
+async def custom_rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"error": "You've hit the demo's request limit — try again later."}
+    )
 
 @app.get("/api/config")
 async def get_config():
     # If KEY_SOURCE is 'server', the frontend will NOT prompt for an API key.
     # If it's 'byok' (or anything else), the frontend will require it.
     key_source = os.getenv("KEY_SOURCE", "byok").lower()
-    return {"requires_api_key": key_source != "server"}
+    return {
+        "requires_api_key": key_source != "server",
+        "requires_access_code": bool(os.getenv("ACCESS_CODE"))
+    }
 
 
 @app.post("/api/optimize", response_model=OptimizeResponse, responses={400: {"model": ErrorResponse}, 429: {"model": ErrorResponse}})
+@limiter.limit(os.getenv("RATE_LIMIT", "10/hour"))
 async def optimize_resume(
+    request: Request,
     x_gemini_api_key: str = Header(None, description="User's Gemini API key (optional if set on server)"),
+    x_access_code: str = Header(None, description="Demo access code (optional)"),
     resume_file: UploadFile = File(...),
     jd_text: str = Form(...)
 ):
+    access_code = os.getenv("ACCESS_CODE")
+    if access_code and x_access_code != access_code:
+        return JSONResponse(status_code=401, content={"error": "Invalid or missing access code."})
+
     # Resolve API key: prefer server env var, then fallback to header
     api_key = os.getenv("GEMINI_API_KEY") or x_gemini_api_key
     
@@ -64,6 +87,14 @@ async def optimize_resume(
     # 1. Read and parse file
     try:
         content = await resume_file.read()
+        
+        max_upload_mb = int(os.getenv("MAX_UPLOAD_MB", 5))
+        if len(content) > max_upload_mb * 1024 * 1024:
+            return JSONResponse(
+                status_code=413, 
+                content={"error": f"File exceeds maximum upload size of {max_upload_mb}MB."}
+            )
+
         filename = resume_file.filename or ""
         original_resume_text = parse_resume_file(filename, content)
     except ValueError as e:
@@ -125,10 +156,17 @@ async def optimize_resume(
     )
 
 @app.post("/api/cover-letter", response_model=CoverLetterResponse, responses={400: {"model": ErrorResponse}, 429: {"model": ErrorResponse}})
+@limiter.limit(os.getenv("RATE_LIMIT", "10/hour"))
 async def generate_cover_letter(
+    request: Request,
     req: CoverLetterRequest,
     x_gemini_api_key: str = Header(None),
+    x_access_code: str = Header(None),
 ):
+    access_code = os.getenv("ACCESS_CODE")
+    if access_code and x_access_code != access_code:
+        return JSONResponse(status_code=401, content={"error": "Invalid or missing access code."})
+
     api_key = os.getenv("GEMINI_API_KEY") or x_gemini_api_key
     if not api_key:
         return JSONResponse(status_code=400, content={"error": "Missing Gemini API key."})
