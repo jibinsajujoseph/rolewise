@@ -165,6 +165,9 @@ function App() {
   };
 
   const resetFlow = () => {
+    if (step === 2 && !window.confirm("Are you sure you want to start over? Any unsaved analysis will be lost.")) {
+      return;
+    }
     setStep(1);
     setExtractedResume(null);
     setMatchScore(0);
@@ -188,7 +191,7 @@ function App() {
           <span className="nav-link active">Optimizer</span>
         </div>
         <button className="btn btn-primary" onClick={resetFlow} style={{ padding: '8px 16px' }}>
-          Build New Resume
+          Start Over
         </button>
       </header>
 
