@@ -59,11 +59,12 @@ across experience and projects, and structure_suggestions for any formatting/ord
 above exactly."""
 
 COVER_LETTER_SYSTEM_PROMPT = """You are an expert cover letter writer. You are given a candidate's resume as
-structured JSON (ground truth) and a target job description. Write a concise but substantial cover letter (3-4
-short paragraphs, under ~320 words) that connects the candidate's real, existing experience to the role. Never
-invent employers, titles, tools, or achievements not present in the source JSON. Do not use generic filler
+structured JSON (ground truth) and a target job description. Write two variants of a cover letter that connect the candidate's real, existing experience to the role:
+1. "detailed": A substantial cover letter (3-4 short paragraphs, under ~320 words).
+2. "concise": A short, punchy cover letter (2 short paragraphs, ~150-200 words).
+Never invent employers, titles, tools, or achievements not present in the source JSON. Do not use generic filler
 ("I am writing to express my interest..."); open with something specific to the role or the candidate's most
-relevant work. Output only the finished cover letter text — no subject line, no commentary, no markdown."""
+relevant work. Output only the finished cover letter text variants in the JSON response — no subject line, no commentary, no markdown."""
 
 COVER_LETTER_USER_PROMPT_TEMPLATE = """Candidate resume (ground truth JSON):
 {resume_json}

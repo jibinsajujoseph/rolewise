@@ -24,7 +24,8 @@ function App() {
   const [bulletSuggestions, setBulletSuggestions] = useState([]);
   const [structureSuggestions, setStructureSuggestions] = useState([]);
   
-  const [coverLetter, setCoverLetter] = useState(null);
+  const [coverLetterVariants, setCoverLetterVariants] = useState(null);
+  const [coverLetterVariant, setCoverLetterVariant] = useState('detailed');
   const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
   const [coverLetterError, setCoverLetterError] = useState('');
   const [copiedItems, setCopiedItems] = useState({});
@@ -35,11 +36,11 @@ function App() {
   const coverLetterRef = useRef(null);
 
   useEffect(() => {
-    if (coverLetterRef.current) {
+    if (coverLetterRef.current && coverLetterVariants) {
       coverLetterRef.current.style.height = 'auto';
       coverLetterRef.current.style.height = coverLetterRef.current.scrollHeight + 'px';
     }
-  }, [coverLetter]);
+  }, [coverLetterVariants, coverLetterVariant]);
 
   useEffect(() => {
     fetch(`${API_URL}/api/config`)
@@ -124,7 +125,7 @@ function App() {
       setKeywordSuggestions(data.keyword_suggestions || []);
       setBulletSuggestions(data.bullet_suggestions || []);
       setStructureSuggestions(data.structure_suggestions || []);
-      setCoverLetter(null);
+      setCoverLetterVariants(null);
       setCopiedItems({});
       setStep(2);
     } catch (err) {
@@ -165,7 +166,11 @@ function App() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to generate cover letter');
-      setCoverLetter(data.cover_letter);
+      setCoverLetterVariants({
+        detailed: data.cover_letter_detailed,
+        concise: data.cover_letter_concise
+      });
+      setCoverLetterVariant('detailed');
     } catch (err) {
       setCoverLetterError(err.message);
     } finally {
@@ -184,7 +189,7 @@ function App() {
     setKeywordSuggestions([]);
     setBulletSuggestions([]);
     setStructureSuggestions([]);
-    setCoverLetter(null);
+    setCoverLetterVariants(null);
     setCoverLetterError('');
     setExpandedKeyword(null);
   };
@@ -495,11 +500,27 @@ function App() {
                     Need a cover letter tailored to this role? We can generate a concise, factual draft based on your verified resume.
                   </p>
                   
-                  {coverLetter ? (
+                  {coverLetterVariants ? (
                     <div className="text-left mt-6">
                       <div className="flex justify-between items-center mb-4">
                         <span style={{ fontWeight: 600, color: 'var(--primary)' }}>Generated Cover Letter</span>
-                        <button className="btn btn-primary" onClick={() => handleCopyItem(coverLetter, 'coverLetter')} style={{ padding: '6px 12px' }}>
+                        <div style={{ display: 'flex', gap: '8px', backgroundColor: 'var(--surface)', padding: '4px', borderRadius: '8px', border: '1px solid var(--outline)' }}>
+                          <button 
+                            className={`btn ${coverLetterVariant === 'detailed' ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={() => setCoverLetterVariant('detailed')}
+                            style={{ padding: '4px 12px', fontSize: '13px', border: 'none', boxShadow: coverLetterVariant === 'detailed' ? '' : 'none', backgroundColor: coverLetterVariant === 'detailed' ? '' : 'transparent' }}
+                          >
+                            Detailed
+                          </button>
+                          <button 
+                            className={`btn ${coverLetterVariant === 'concise' ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={() => setCoverLetterVariant('concise')}
+                            style={{ padding: '4px 12px', fontSize: '13px', border: 'none', boxShadow: coverLetterVariant === 'concise' ? '' : 'none', backgroundColor: coverLetterVariant === 'concise' ? '' : 'transparent' }}
+                          >
+                            Concise
+                          </button>
+                        </div>
+                        <button className="btn btn-primary" onClick={() => handleCopyItem(coverLetterVariants[coverLetterVariant], 'coverLetter')} style={{ padding: '6px 12px' }}>
                           {copiedItems['coverLetter'] ? <CheckCircle2 size={14} /> : <Copy size={14} />} {copiedItems['coverLetter'] ? 'Copied' : 'Copy'}
                         </button>
                       </div>
@@ -515,8 +536,8 @@ function App() {
                           fontFamily: 'inherit',
                           minHeight: '200px'
                         }}
-                        value={coverLetter}
-                        onChange={(e) => setCoverLetter(e.target.value)}
+                        value={coverLetterVariants[coverLetterVariant]}
+                        onChange={(e) => setCoverLetterVariants(prev => ({ ...prev, [coverLetterVariant]: e.target.value }))}
                       />
                     </div>
                   ) : (

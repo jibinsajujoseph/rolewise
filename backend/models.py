@@ -82,7 +82,8 @@ class CoverLetterRequest(BaseModel):
     jd_text: str
 
 class CoverLetterResponse(BaseModel):
-    cover_letter: str
+    cover_letter_concise: str
+    cover_letter_detailed: str
 
 class ErrorResponse(BaseModel):
     error: str
