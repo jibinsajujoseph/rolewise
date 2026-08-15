@@ -18,18 +18,29 @@ function App() {
   const [error, setError] = useState('');
   
   const [extractedResume, setExtractedResume] = useState(null);
+  const [matchScore, setMatchScore] = useState(0);
   const [summarySuggestion, setSummarySuggestion] = useState(null);
   const [keywordSuggestions, setKeywordSuggestions] = useState([]);
   const [bulletSuggestions, setBulletSuggestions] = useState([]);
   const [structureSuggestions, setStructureSuggestions] = useState([]);
   
-  const [coverLetter, setCoverLetter] = useState(null);
+  const [coverLetterVariants, setCoverLetterVariants] = useState(null);
+  const [coverLetterVariant, setCoverLetterVariant] = useState('detailed');
   const [isGeneratingCoverLetter, setIsGeneratingCoverLetter] = useState(false);
   const [coverLetterError, setCoverLetterError] = useState('');
   const [copiedItems, setCopiedItems] = useState({});
   const [expandedKeyword, setExpandedKeyword] = useState(null);
+  const [activeModal, setActiveModal] = useState(null);
   
   const fileInputRef = useRef(null);
+  const coverLetterRef = useRef(null);
+
+  useEffect(() => {
+    if (coverLetterRef.current && coverLetterVariants) {
+      coverLetterRef.current.style.height = 'auto';
+      coverLetterRef.current.style.height = coverLetterRef.current.scrollHeight + 'px';
+    }
+  }, [coverLetterVariants, coverLetterVariant]);
 
   useEffect(() => {
     fetch(`${API_URL}/api/config`)
@@ -109,11 +120,12 @@ function App() {
       }
       
       setExtractedResume(data.extracted_resume);
+      setMatchScore(data.match_score || 0);
       setSummarySuggestion(data.summary_suggestion);
       setKeywordSuggestions(data.keyword_suggestions || []);
       setBulletSuggestions(data.bullet_suggestions || []);
       setStructureSuggestions(data.structure_suggestions || []);
-      setCoverLetter(null);
+      setCoverLetterVariants(null);
       setCopiedItems({});
       setStep(2);
     } catch (err) {
@@ -154,7 +166,11 @@ function App() {
       });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error || 'Failed to generate cover letter');
-      setCoverLetter(data.cover_letter);
+      setCoverLetterVariants({
+        detailed: data.cover_letter_detailed,
+        concise: data.cover_letter_concise
+      });
+      setCoverLetterVariant('detailed');
     } catch (err) {
       setCoverLetterError(err.message);
     } finally {
@@ -163,13 +179,17 @@ function App() {
   };
 
   const resetFlow = () => {
+    if (step === 2 && !window.confirm("Are you sure you want to start over? Any unsaved analysis will be lost.")) {
+      return;
+    }
     setStep(1);
     setExtractedResume(null);
+    setMatchScore(0);
     setSummarySuggestion(null);
     setKeywordSuggestions([]);
     setBulletSuggestions([]);
     setStructureSuggestions([]);
-    setCoverLetter(null);
+    setCoverLetterVariants(null);
     setCoverLetterError('');
     setExpandedKeyword(null);
   };
@@ -185,7 +205,7 @@ function App() {
           <span className="nav-link active">Optimizer</span>
         </div>
         <button className="btn btn-primary" onClick={resetFlow} style={{ padding: '8px 16px' }}>
-          Build New Resume
+          Start Over
         </button>
       </header>
 
@@ -331,10 +351,32 @@ function App() {
 
             <div className="suggestions-layout flex flex-col gap-6 max-w-4xl mx-auto w-full">
                
+               <div className="card text-center mb-2" style={{ padding: '32px' }}>
+                 <div style={{
+                   fontSize: '56px',
+                   fontWeight: '800',
+                   color: matchScore < 50 ? '#be123c' : matchScore <= 75 ? '#d97706' : '#16a34a',
+                   lineHeight: '1',
+                   marginBottom: '12px'
+                 }}>
+                   {matchScore}%
+                 </div>
+                 <div style={{ fontSize: '18px', fontWeight: '600', color: 'var(--primary)' }}>
+                   Keyword Match
+                 </div>
+               </div>
+
                {summarySuggestion && (
                  <div className="card">
                     <div className="flex justify-between items-start mb-4">
-                      <label className="label mb-0" style={{ fontSize: '16px', color: 'var(--primary)' }}>Summary Suggestion</label>
+                      <label className="label mb-0" style={{ fontSize: '16px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        Summary Suggestion
+                        {summarySuggestion.needs_review && (
+                          <span title="This suggestion may contain unverified claims. Please review carefully." style={{ color: '#f59e0b', cursor: 'help', display: 'flex' }}>
+                            <AlertCircle size={16} />
+                          </span>
+                        )}
+                      </label>
                       <button className="btn btn-secondary" onClick={() => handleCopyItem(summarySuggestion.suggested, 'summary')} style={{ padding: '6px 12px' }}>
                         {copiedItems['summary'] ? <CheckCircle2 size={14} /> : <Copy size={14} />} {copiedItems['summary'] ? 'Copied' : 'Copy'}
                       </button>
@@ -418,6 +460,12 @@ function App() {
                                       bullet.suggested_bullet
                                     )}
                                   </span>
+                                  {bullet.needs_review && (
+                                    <div style={{ marginTop: '8px', fontSize: '12px', color: '#f59e0b', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                      <AlertCircle size={14} />
+                                      <span>May contain unverified claims. Review carefully.</span>
+                                    </div>
+                                  )}
                                 </div>
                                 <p style={{ fontSize: '13px', color: 'var(--secondary)' }}><strong>Why:</strong> {bullet.reason}</p>
                                 <button className="btn btn-secondary absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => handleCopyItem(bullet.suggested_bullet, `bullet-${section}-${bIdx}`)} style={{ padding: '4px 8px', fontSize: '12px', backgroundColor: '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
@@ -452,17 +500,45 @@ function App() {
                     Need a cover letter tailored to this role? We can generate a concise, factual draft based on your verified resume.
                   </p>
                   
-                  {coverLetter ? (
+                  {coverLetterVariants ? (
                     <div className="text-left mt-6">
                       <div className="flex justify-between items-center mb-4">
                         <span style={{ fontWeight: 600, color: 'var(--primary)' }}>Generated Cover Letter</span>
-                        <button className="btn btn-primary" onClick={() => handleCopyItem(coverLetter, 'coverLetter')} style={{ padding: '6px 12px' }}>
+                        <div style={{ display: 'flex', gap: '8px', backgroundColor: 'var(--surface)', padding: '4px', borderRadius: '8px', border: '1px solid var(--outline)' }}>
+                          <button 
+                            className={`btn ${coverLetterVariant === 'detailed' ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={() => setCoverLetterVariant('detailed')}
+                            style={{ padding: '4px 12px', fontSize: '13px', border: 'none', boxShadow: coverLetterVariant === 'detailed' ? '' : 'none', backgroundColor: coverLetterVariant === 'detailed' ? '' : 'transparent' }}
+                          >
+                            Detailed
+                          </button>
+                          <button 
+                            className={`btn ${coverLetterVariant === 'concise' ? 'btn-primary' : 'btn-secondary'}`}
+                            onClick={() => setCoverLetterVariant('concise')}
+                            style={{ padding: '4px 12px', fontSize: '13px', border: 'none', boxShadow: coverLetterVariant === 'concise' ? '' : 'none', backgroundColor: coverLetterVariant === 'concise' ? '' : 'transparent' }}
+                          >
+                            Concise
+                          </button>
+                        </div>
+                        <button className="btn btn-primary" onClick={() => handleCopyItem(coverLetterVariants[coverLetterVariant], 'coverLetter')} style={{ padding: '6px 12px' }}>
                           {copiedItems['coverLetter'] ? <CheckCircle2 size={14} /> : <Copy size={14} />} {copiedItems['coverLetter'] ? 'Copied' : 'Copy'}
                         </button>
                       </div>
-                      <div className="suggestion-item p-6 whitespace-pre-wrap" style={{ backgroundColor: '#ffffff', fontSize: '14px', lineHeight: '1.6' }}>
-                        {coverLetter}
-                      </div>
+                      <textarea
+                        ref={coverLetterRef}
+                        className="suggestion-item p-6 w-full"
+                        style={{ 
+                          backgroundColor: '#ffffff', 
+                          fontSize: '14px', 
+                          lineHeight: '1.6', 
+                          resize: 'vertical',
+                          overflow: 'hidden',
+                          fontFamily: 'inherit',
+                          minHeight: '200px'
+                        }}
+                        value={coverLetterVariants[coverLetterVariant]}
+                        onChange={(e) => setCoverLetterVariants(prev => ({ ...prev, [coverLetterVariant]: e.target.value }))}
+                      />
                     </div>
                   ) : (
                     <div className="flex flex-col items-center gap-4">
@@ -490,15 +566,68 @@ function App() {
         )}
       </main>
 
+      {activeModal && (
+        <div className="modal-overlay" onClick={() => setActiveModal(null)} style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.5)', zIndex: 1000, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: '24px' }}>
+          <div className="card modal-content" onClick={e => e.stopPropagation()} style={{ backgroundColor: 'var(--surface)', maxWidth: '600px', width: '100%', maxHeight: '90vh', overflowY: 'auto', position: 'relative' }}>
+            <button className="btn btn-secondary" onClick={() => setActiveModal(null)} style={{ position: 'absolute', top: '16px', right: '16px', padding: '4px 8px' }}>Close</button>
+            
+            {activeModal === 'privacy' && (
+              <div>
+                <h2 className="mb-4">Privacy Policy</h2>
+                <div className="flex flex-col gap-4" style={{ fontSize: '14px', color: 'var(--on-surface)', lineHeight: '1.6' }}>
+                  <p><strong>Your Data is Yours.</strong> At Rolewise AI, we take your privacy seriously. Here is exactly how we handle your data:</p>
+                  
+                  <div>
+                    <h3 style={{ fontSize: '16px', marginBottom: '8px' }}>What is sent to our servers:</h3>
+                    <ul style={{ paddingLeft: '24px', listStyleType: 'disc' }}>
+                      <li>Your resume file (PDF or DOCX)</li>
+                      <li>The Job Description text you provide</li>
+                      <li>Your Gemini API key (sent securely as an HTTP header)</li>
+                    </ul>
+                  </div>
+
+                  <div>
+                    <h3 style={{ fontSize: '16px', marginBottom: '8px' }}>How it is processed:</h3>
+                    <ul style={{ paddingLeft: '24px', listStyleType: 'disc' }}>
+                      <li><strong>No Storage:</strong> Resumes and Job Descriptions are processed in-memory and are <strong>not persisted or saved</strong> on our servers.</li>
+                      <li><strong>API Key Security:</strong> Your Gemini API key is only forwarded to the Gemini API during your request. It is <strong>never logged, cached, or saved</strong> by Rolewise AI.</li>
+                    </ul>
+                  </div>
+                  
+                  <p style={{ marginTop: '8px' }}>By using this tool, you agree to this processing purely for the purpose of generating your optimization report.</p>
+                </div>
+              </div>
+            )}
+            
+            {activeModal === 'terms' && (
+              <div>
+                <h2 className="mb-4">Terms of Service</h2>
+                <p style={{ fontSize: '14px', color: 'var(--secondary)' }}>
+                  This is a placeholder for the Terms of Service. By using this tool, you accept that it is provided "as is" for demonstration and optimization purposes.
+                </p>
+              </div>
+            )}
+
+            {activeModal === 'contact' && (
+              <div>
+                <h2 className="mb-4">Contact</h2>
+                <p style={{ fontSize: '14px', color: 'var(--secondary)' }}>
+                  This is a placeholder for Contact information. 
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       <footer className="app-footer text-center" style={{ padding: '48px 24px', backgroundColor: 'var(--surface-container-high)', marginTop: '48px' }}>
         <h3 className="mb-4">Rolewise AI</h3>
         <div className="flex justify-center gap-4 mb-4" style={{ fontSize: '13px', color: 'var(--on-surface-variant)' }}>
-          <span>Privacy Policy</span>
-          <span>Terms of Service</span>
-          <span>ATS Guide</span>
-          <span>Contact</span>
+          <span onClick={() => setActiveModal('privacy')} className="footer-link">Privacy Policy</span>
+          <span onClick={() => setActiveModal('terms')} className="footer-link">Terms of Service</span>
+          <span onClick={() => setActiveModal('contact')} className="footer-link">Contact</span>
         </div>
-        <p style={{ fontSize: '12px', color: 'var(--secondary)', fontFamily: 'var(--font-mono)' }}>© 2024 Rolewise AI. Precision Career Engineering.</p>
+        <p style={{ fontSize: '12px', color: 'var(--secondary)', fontFamily: 'var(--font-mono)' }}>© {new Date().getFullYear()} Rolewise AI. Precision Career Engineering.</p>
       </footer>
       
       <style>{`
@@ -526,6 +655,7 @@ function App() {
         }
         
         .max-w-3xl { max-width: 48rem; }
+        .max-w-4xl { max-width: 56rem; }
         .mx-auto { margin-left: auto; margin-right: auto; }
         
         @keyframes spin {
@@ -575,6 +705,15 @@ function App() {
            background-color: #f0fdf4;
            padding: 6px 8px;
            border-radius: 4px;
+        }
+        
+        .footer-link {
+           cursor: pointer;
+           transition: color 0.2s;
+        }
+        .footer-link:hover {
+           color: var(--primary);
+           text-decoration: underline;
         }
       `}</style>
     </div>

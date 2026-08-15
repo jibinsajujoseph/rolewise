@@ -17,6 +17,7 @@ load_dotenv(override=True)
 from parsing import parse_resume_file
 from llm import (
     call_llm, 
+    validate_grounding,
     EXTRACTION_SYSTEM_PROMPT, 
     EXTRACTION_USER_PROMPT_TEMPLATE, 
     SUGGESTIONS_SYSTEM_PROMPT, 
@@ -43,7 +44,14 @@ app.add_middleware(
 # Note: If deployed behind a reverse proxy (e.g. nginx), get_remote_address 
 # might return the proxy's IP. The limiter needs the real client IP from 
 # X-Forwarded-For instead of the proxy's IP.
-limiter = Limiter(key_func=get_remote_address)
+def get_client_ip(request: Request) -> str:
+    if os.getenv("TRUST_PROXY", "false").lower() == "true":
+        forwarded_for = request.headers.get("X-Forwarded-For")
+        if forwarded_for:
+            return forwarded_for.split(",")[0].strip()
+    return get_remote_address(request)
+
+limiter = Limiter(key_func=get_client_ip)
 app.state.limiter = limiter
 
 @app.exception_handler(RateLimitExceeded)
@@ -107,7 +115,6 @@ async def optimize_resume(
         extraction_user_prompt = EXTRACTION_USER_PROMPT_TEMPLATE.format(resume_text=original_resume_text)
         
         extracted_resume_dict = await call_llm(
-            provider="gemini",
             api_key=api_key,
             system_prompt=EXTRACTION_SYSTEM_PROMPT,
             user_prompt=extraction_user_prompt,
@@ -126,13 +133,26 @@ async def optimize_resume(
             jd_text=jd_text
         )
         
+        # Upgrading from lite to flash for better reasoning and strict adherence to no-fabrication rules,
+        # accepting a cost/latency tradeoff compared to the extraction step.
         suggestions_result_dict = await call_llm(
-            provider="gemini",
             api_key=api_key,
             system_prompt=SUGGESTIONS_SYSTEM_PROMPT,
             user_prompt=suggestions_user_prompt,
-            response_schema=SuggestionsResponse
+            response_schema=SuggestionsResponse,
+            model="gemini-3.5-flash"
         )
+        
+        # Grounding check step
+        # Note: Adds one extra cheap LLM call per request. Tradeoff is added latency/cost, 
+        # but ensures zero-fabrication. Can be disabled under heavy load.
+        if os.getenv("ENABLE_GROUNDING_CHECK", "true").lower() == "true":
+            suggestions_result_dict = await validate_grounding(
+                suggestions=suggestions_result_dict,
+                source_resume=extracted_resume_dict,
+                api_key=api_key
+            )
+            
     except Exception as e:
         error_msg = str(e)
         status_code = 429 if "rate limit hit" in error_msg.lower() else 400
@@ -147,8 +167,13 @@ async def optimize_resume(
     for kw in keyword_suggestions:
         kw["present"] = kw["keyword"] not in missing_keywords
 
+    total_keywords = len(keyword_suggestions)
+    present_keywords = sum(1 for kw in keyword_suggestions if kw["present"])
+    match_score = int((present_keywords / total_keywords) * 100) if total_keywords > 0 else 0
+
     return OptimizeResponse(
         extracted_resume=extracted_resume_dict,
+        match_score=match_score,
         summary_suggestion=suggestions_result_dict.get("summary_suggestion"),
         keyword_suggestions=keyword_suggestions,
         bullet_suggestions=suggestions_result_dict.get("bullet_suggestions", []),
@@ -175,12 +200,14 @@ async def generate_cover_letter(
             resume_json=json.dumps(req.resume.model_dump(), indent=2),
             jd_text=req.jd_text,
         )
+        # Upgrading from lite to flash for better prose and strict adherence to no-fabrication rules,
+        # accepting a cost/latency tradeoff compared to the extraction step.
         result = await call_llm(
-            provider="gemini",
             api_key=api_key,
             system_prompt=COVER_LETTER_SYSTEM_PROMPT,
             user_prompt=prompt,
             response_schema=CoverLetterResponse,
+            model="gemini-3.5-flash"
         )
     except Exception as e:
         error_msg = str(e)

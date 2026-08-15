@@ -9,15 +9,17 @@ Rolewise is an AI-powered resume optimization tool that strictly tailors your ex
 - **Strict Factual Integrity**: Utilizes a two-step Gemini LLM pipeline to ensure no fake jobs, skills, or metrics are ever added to your resume.
 - **Born-Digital Parsing**: Safely reads PDF and DOCX files locally.
 - **Missing Keyword Analysis**: Deterministically cross-references your resume against the job description to highlight missing ATS keywords.
-- **Flexible Configuration**: Supports both Bring-Your-Own-Key (BYOK) mode for users and Server-Mode for hosted deployments.
+- **Cover Letter Generation**: Automatically creates a tailored cover letter based on your resume and the provided job description.
+- **Flexible Configuration**: Supports both Bring-Your-Own-Key (BYOK) mode for users and Server-Mode for hosted deployments, with optional Access Code protection.
 - **Executive Precision Design**: A modern, distraction-free user interface built for career professionals.
+- **Production Ready**: Built-in rate limiting, payload size restrictions, and CORS protection.
 
 ## Architecture
 
 Rolewise is a stateless application built with:
 - **Frontend**: React + Vite (Vanilla CSS)
 - **Backend**: FastAPI (Python)
-- **AI Engine**: Google Gemini (gemini-2.5-flash)
+- **AI Engine**: Google Gemini (`gemini-3.5-flash-lite` via `google-genai` SDK)
 
 No databases are used. Resumes and Job Descriptions are processed entirely in memory and immediately discarded after the request to ensure maximum privacy.
 
@@ -40,9 +42,14 @@ Copy the `.env.example` file to create your local `.env`:
 cp .env.example .env
 ```
 
-You can run the backend in two modes:
-- **BYOK (Bring Your Own Key)**: Leave `KEY_SOURCE=byok`. The frontend will prompt the user to paste their Gemini API key.
-- **Server Mode**: Set `KEY_SOURCE=server` and provide your `GEMINI_API_KEY`. The frontend will automatically hide the API key input.
+You can configure the backend using the following environment variables:
+- `KEY_SOURCE`: Set to `byok` to prompt users for their Gemini API key, or `server` to use the server's key (default: `byok`).
+- `GEMINI_API_KEY`: Your Gemini API key (required for Server Mode).
+- `ACCESS_CODE`: Optional code to restrict access to the application.
+- `RATE_LIMIT`: Optional rate limit configuration (default: `10/hour`).
+- `MAX_UPLOAD_MB`: Maximum file upload size in MB (default: `5`).
+- `CORS_ORIGINS`: Comma-separated list of allowed CORS origins (default: `http://localhost:5173`).
+- `TRUST_PROXY`: Set to `true` if deploying behind a reverse proxy (e.g., nginx) to use `X-Forwarded-For` for rate limiting (default: `false`).
 
 Start the backend development server:
 ```bash
@@ -70,5 +77,5 @@ The application will be available at [http://localhost:5173](http://localhost:51
 1. Upload your current, text-based PDF or DOCX resume.
 2. Paste the full target Job Description.
 3. Click "Start Optimization".
-4. Review your tailored resume and the missing keywords analysis.
+4. Review your tailored resume, missing keywords analysis, and generated cover letter.
 5. Copy your new tailored resume directly to your clipboard!

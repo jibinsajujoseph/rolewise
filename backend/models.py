@@ -27,10 +27,14 @@ class Project(BaseModel):
     link: Optional[str] = None
     bullets: List[str]
 
+class SkillCategory(BaseModel):
+    category: str
+    items: List[str]
+
 class ResumeContent(BaseModel):
     contact: Contact
     summary: Optional[str] = None
-    skills: List[str]
+    skills: List[SkillCategory]
     experience: List[Experience]
     education: List[Education]
     projects: List[Project]
@@ -46,12 +50,14 @@ class SummarySuggestion(BaseModel):
     original: Optional[str] = None
     suggested: str
     rationale: str
+    needs_review: Optional[bool] = False
 
 class BulletSuggestion(BaseModel):
     section: str          # e.g. "Experience: AI Engineer at Akumen" or "Project: InboxIQ"
     original_bullet: str
     suggested_bullet: str
     reason: str           # e.g. "Adds quantifiable metric", "Surfaces required keyword 'RAG'"
+    needs_review: Optional[bool] = False
 
 class StructureSuggestion(BaseModel):
     title: str
@@ -65,6 +71,7 @@ class SuggestionsResponse(BaseModel):
 
 class OptimizeResponse(BaseModel):
     extracted_resume: ResumeContent
+    match_score: int
     summary_suggestion: Optional[SummarySuggestion] = None
     keyword_suggestions: List[KeywordSuggestion]
     bullet_suggestions: List[BulletSuggestion]
@@ -75,7 +82,8 @@ class CoverLetterRequest(BaseModel):
     jd_text: str
 
 class CoverLetterResponse(BaseModel):
-    cover_letter: str
+    cover_letter_concise: str
+    cover_letter_detailed: str
 
 class ErrorResponse(BaseModel):
     error: str
