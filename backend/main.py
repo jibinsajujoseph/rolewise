@@ -61,7 +61,7 @@ def parse_rate_limit(limit_str):
     if not limit_str: return 10
     return int(limit_str.split('/')[0])
 
-MAX_ANALYSES_PER_HOUR = parse_rate_limit(os.getenv("EXTRACT_RATE_LIMIT", "10/hour"))
+MAX_ANALYSES_PER_HOUR = parse_rate_limit(os.getenv("RATE_LIMIT", "10/hour"))
 
 def get_remaining_analyses(client_ip: str) -> int:
     current_time = time.time()
@@ -79,7 +79,7 @@ app.state.limiter = limiter
 async def custom_rate_limit_exceeded_handler(request: Request, exc: RateLimitExceeded):
     return JSONResponse(
         status_code=429,
-        content={"error": "You've hit the demo's request limit — try again later.", "remaining_calls": 0}
+        content={"error": "You've hit the demo's request limit — try again later.", "remaining_calls": 0, "limit": MAX_ANALYSES_PER_HOUR}
     )
 
 @app.get("/api/config")
@@ -156,7 +156,7 @@ async def _suggest_internal(extracted_resume_dict: dict, jd_text: str, api_key: 
         "structure_suggestions": suggestions_result_dict.get("structure_suggestions", [])
     }
 
-def check_auth(x_access_code: str, x_gemini_api_key: str):
+def check_auth(x_access_code: str, x_gemini_api_key: str, request: Request = None):
     access_code = os.getenv("ACCESS_CODE")
     if access_code and x_access_code != access_code:
         raise HTTPException(status_code=401, detail="Invalid or missing access code.")
@@ -164,10 +164,14 @@ def check_auth(x_access_code: str, x_gemini_api_key: str):
     api_key = os.getenv("GEMINI_API_KEY") or x_gemini_api_key
     if not api_key:
         raise HTTPException(status_code=400, detail="Missing Gemini API key. Please provide it in the UI or configure the server.")
+    
+    if request:
+        record_analysis(get_client_ip(request))
+        
     return api_key
 
 @app.post("/api/extract", response_model=ResumeContent, responses={400: {"model": ErrorResponse}, 429: {"model": ErrorResponse}})
-@limiter.limit(os.getenv("EXTRACT_RATE_LIMIT", "10/hour"))
+@limiter.limit(os.getenv("RATE_LIMIT", "10/hour"))
 async def extract_resume(
     request: Request,
     x_gemini_api_key: str = Header(None, description="User's Gemini API key (optional if set on server)"),
@@ -175,7 +179,7 @@ async def extract_resume(
     resume_file: UploadFile = File(...)
 ):
     try:
-        api_key = check_auth(x_access_code, x_gemini_api_key)
+        api_key = check_auth(x_access_code, x_gemini_api_key, request)
     except HTTPException as e:
         return JSONResponse(status_code=e.status_code, content={"error": e.detail})
 
@@ -183,6 +187,7 @@ async def extract_resume(
         extracted_resume_dict, _ = await _extract_internal(resume_file, api_key)
         extracted_data = extracted_resume_dict
         extracted_data["remaining_calls"] = get_remaining_analyses(get_client_ip(request))
+        extracted_data["limit"] = MAX_ANALYSES_PER_HOUR
         return ResumeContent(**extracted_data)
     except ValueError as e:
         return JSONResponse(status_code=400, content={"error": str(e)})
@@ -192,7 +197,7 @@ async def extract_resume(
         return JSONResponse(status_code=status_code, content={"error": error_msg})
 
 @app.post("/api/suggest", response_model=SuggestResponse, responses={400: {"model": ErrorResponse}, 429: {"model": ErrorResponse}})
-@limiter.limit(os.getenv("SUGGEST_RATE_LIMIT", "20/hour"))
+@limiter.limit(os.getenv("RATE_LIMIT", "10/hour"))
 async def suggest_resume(
     request: Request,
     req: SuggestRequest,
@@ -200,22 +205,21 @@ async def suggest_resume(
     x_access_code: str = Header(None, description="Demo access code (optional)"),
 ):
     try:
-        api_key = check_auth(x_access_code, x_gemini_api_key)
+        api_key = check_auth(x_access_code, x_gemini_api_key, request)
     except HTTPException as e:
         return JSONResponse(status_code=e.status_code, content={"error": e.detail})
 
-    client_ip = get_client_ip(request)
-    record_analysis(client_ip)
-    
     try:
         result = await _suggest_internal(req.resume.model_dump(), req.jd_text, api_key)
+        client_ip = get_client_ip(request)
         return SuggestResponse(
             match_score=result.get("match_score", 0),
             summary_suggestion=result.get("summary_suggestion"),
             keyword_suggestions=result.get("keyword_suggestions", []),
             bullet_suggestions=result.get("bullet_suggestions", []),
             structure_suggestions=result.get("structure_suggestions", []),
-            remaining_calls=get_remaining_analyses(client_ip)
+            remaining_calls=get_remaining_analyses(client_ip),
+            limit=MAX_ANALYSES_PER_HOUR
         )
     except Exception as e:
         error_msg = str(e)
@@ -232,7 +236,7 @@ async def optimize_resume(
     jd_text: str = Form(...)
 ):
     try:
-        api_key = check_auth(x_access_code, x_gemini_api_key)
+        api_key = check_auth(x_access_code, x_gemini_api_key, request)
     except HTTPException as e:
         return JSONResponse(status_code=e.status_code, content={"error": e.detail})
 
@@ -254,6 +258,8 @@ async def optimize_resume(
         
     return OptimizeResponse(
         extracted_resume=extracted_resume_dict,
+        remaining_calls=get_remaining_analyses(get_client_ip(request)),
+        limit=MAX_ANALYSES_PER_HOUR,
         **suggest_result
     )
 
@@ -295,8 +301,15 @@ async def generate_cover_letter(
 @app.post("/api/build-resume", responses={400: {"model": ErrorResponse}})
 async def build_resume(
     request: Request,
-    req: BuildResumeRequest
+    req: BuildResumeRequest,
+    x_access_code: str = Header(None)
 ):
+    try:
+        check_auth(x_access_code, None)
+    except HTTPException as e:
+        if e.status_code != 400:
+            return JSONResponse(status_code=e.status_code, content={"error": e.detail})
+
     try:
         docx_buffer = generate_resume_docx(
             resume=req.resume,

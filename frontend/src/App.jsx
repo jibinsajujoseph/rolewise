@@ -123,7 +123,7 @@ function App() {
         const extractData = await extractRes.json();
 
         if (extractData && extractData.remaining_calls !== undefined && extractData.remaining_calls !== null) {
-          setRateLimitInfo({ limit: 10, remaining: extractData.remaining_calls });
+          setRateLimitInfo({ limit: extractData.limit ?? 10, remaining: extractData.remaining_calls });
         }
         
         if (!extractRes.ok) {
@@ -150,8 +150,7 @@ function App() {
       
       const updateRateLimit = (data) => {
         if (data && data.remaining_calls !== undefined && data.remaining_calls !== null) {
-          // Defaulting limit to 10 for display purposes since we no longer receive it from headers
-          setRateLimitInfo({ limit: 10, remaining: data.remaining_calls });
+          setRateLimitInfo({ limit: data.limit ?? 10, remaining: data.remaining_calls });
         }
       };
 
@@ -276,7 +275,7 @@ function App() {
   };
 
   const resetFlow = () => {
-    if (step === 2 && !window.confirm("Are you sure you want to start over? Any unsaved analysis will be lost.")) {
+    if ((step === 2 || step === 3) && !window.confirm("Are you sure you want to start over? Any unsaved analysis will be lost.")) {
       return;
     }
     setStep(1);
@@ -467,7 +466,7 @@ function App() {
                  <ArrowRight size={16} style={{ transform: 'rotate(180deg)' }}/> Start Over
               </div>
               <div className="flex gap-4">
-                {(acceptedSuggestions.summary === true || Object.values(acceptedSuggestions.bullets).some(v => v === true) || Object.values(acceptedSuggestions.keywords).some(v => v === true)) && (
+                {(acceptedSuggestions.summary === true || Object.values(acceptedSuggestions.bullets).some(v => v === true)) && (
                   <button className="btn btn-primary" onClick={handleBuildResume} disabled={isBuildingResume} style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {isBuildingResume ? <Loader2 size={16} className="animate-spin" /> : <FileDown size={16} />}
                     Build Resume
@@ -671,6 +670,9 @@ function App() {
                {structureSuggestions.length > 0 && (
                  <div className="card">
                     <label className="label" style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '16px' }}>Structure & Formatting</label>
+                    <p style={{ fontSize: '13px', color: 'var(--secondary)', marginBottom: '12px' }}>
+                      These aren't applied automatically in "Build Resume" — apply formatting and ordering changes manually in the exported file.
+                    </p>
                     <ul style={{ listStyleType: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {structureSuggestions.map((st, i) => (
                         <li key={i} style={{ borderBottom: i < structureSuggestions.length - 1 ? '1px solid var(--outline)' : 'none', paddingBottom: i < structureSuggestions.length - 1 ? '12px' : '0' }}>

@@ -1,4 +1,5 @@
 import string
+import re
 
 def _get_variants(text: str) -> set[str]:
     text = text.lower().strip()
@@ -30,7 +31,7 @@ def _get_variants(text: str) -> set[str]:
     words = spaced.split()
     if 1 < len(words) <= 4:
         acronym = "".join(w[0] for w in words if w)
-        if len(acronym) > 1:
+        if len(acronym) >= 4:
             variants.add(acronym)
             variants.add(acronym + 's')
             
@@ -59,7 +60,7 @@ def compute_missing_keywords(jd_required_keywords: list[dict], original_resume_t
         
         found = False
         for variant in kw_variants:
-            if any(variant in rv for rv in resume_variants):
+            if any(re.search(rf'\b{re.escape(variant)}\b', rv) for rv in resume_variants):
                 found = True
                 break
                 
