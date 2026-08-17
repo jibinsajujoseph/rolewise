@@ -123,7 +123,7 @@ function App() {
         const extractData = await extractRes.json();
 
         if (extractData && extractData.remaining_calls !== undefined && extractData.remaining_calls !== null) {
-          setRateLimitInfo({ limit: 10, remaining: extractData.remaining_calls });
+          setRateLimitInfo({ limit: extractData.limit ?? 10, remaining: extractData.remaining_calls });
         }
         
         if (!extractRes.ok) {
@@ -150,8 +150,7 @@ function App() {
       
       const updateRateLimit = (data) => {
         if (data && data.remaining_calls !== undefined && data.remaining_calls !== null) {
-          // Defaulting limit to 10 for display purposes since we no longer receive it from headers
-          setRateLimitInfo({ limit: 10, remaining: data.remaining_calls });
+          setRateLimitInfo({ limit: data.limit ?? 10, remaining: data.remaining_calls });
         }
       };
 
