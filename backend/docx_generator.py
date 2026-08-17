@@ -1,5 +1,5 @@
 from docx import Document
-from docx.shared import Pt, Inches
+from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from io import BytesIO
 from models import ResumeContent
@@ -12,6 +12,10 @@ def generate_resume_docx(resume: ResumeContent, accepted_summary: str = None, ac
     font = style.font
     font.name = 'Arial'
     font.size = Pt(11)
+    
+    heading_style = document.styles['Heading 1']
+    heading_style.font.name = 'Arial'
+    heading_style.font.color.rgb = RGBColor(0x1a, 0x1a, 0x1a)  # neutral dark gray/near-black instead of default blue
     
     # Contact info
     contact_p = document.add_paragraph()
