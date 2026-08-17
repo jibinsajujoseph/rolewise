@@ -46,10 +46,11 @@ You can configure the backend using the following environment variables:
 - `KEY_SOURCE`: Set to `byok` to prompt users for their Gemini API key, or `server` to use the server's key (default: `byok`).
 - `GEMINI_API_KEY`: Your Gemini API key (required for Server Mode).
 - `ACCESS_CODE`: Optional code to restrict access to the application.
-- `RATE_LIMIT`: Optional rate limit configuration (default: `10/hour`).
+- `RATE_LIMIT`: Optional rate limit configuration (default: `3/hour`).
 - `MAX_UPLOAD_MB`: Maximum file upload size in MB (default: `5`).
 - `CORS_ORIGINS`: Comma-separated list of allowed CORS origins (default: `http://localhost:5173`).
 - `TRUST_PROXY`: Set to `true` if deploying behind a reverse proxy (e.g., nginx) to use `X-Forwarded-For` for rate limiting (default: `false`).
+- `ENABLE_GROUNDING_CHECK`: Set to `true` to enable LLM grounding checks to prevent hallucination.
 
 Start the backend development server:
 ```bash
