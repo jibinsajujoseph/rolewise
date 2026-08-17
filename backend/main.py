@@ -295,8 +295,15 @@ async def generate_cover_letter(
 @app.post("/api/build-resume", responses={400: {"model": ErrorResponse}})
 async def build_resume(
     request: Request,
-    req: BuildResumeRequest
+    req: BuildResumeRequest,
+    x_access_code: str = Header(None)
 ):
+    try:
+        check_auth(x_access_code, None)
+    except HTTPException as e:
+        if e.status_code != 400:
+            return JSONResponse(status_code=e.status_code, content={"error": e.detail})
+
     try:
         docx_buffer = generate_resume_docx(
             resume=req.resume,
