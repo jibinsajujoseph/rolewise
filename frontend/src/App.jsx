@@ -467,7 +467,7 @@ function App() {
                  <ArrowRight size={16} style={{ transform: 'rotate(180deg)' }}/> Start Over
               </div>
               <div className="flex gap-4">
-                {(acceptedSuggestions.summary === true || Object.values(acceptedSuggestions.bullets).some(v => v === true) || Object.values(acceptedSuggestions.keywords).some(v => v === true)) && (
+                {(acceptedSuggestions.summary === true || Object.values(acceptedSuggestions.bullets).some(v => v === true)) && (
                   <button className="btn btn-primary" onClick={handleBuildResume} disabled={isBuildingResume} style={{ padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                     {isBuildingResume ? <Loader2 size={16} className="animate-spin" /> : <FileDown size={16} />}
                     Build Resume
