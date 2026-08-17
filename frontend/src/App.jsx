@@ -671,6 +671,9 @@ function App() {
                {structureSuggestions.length > 0 && (
                  <div className="card">
                     <label className="label" style={{ fontSize: '16px', color: 'var(--primary)', marginBottom: '16px' }}>Structure & Formatting</label>
+                    <p style={{ fontSize: '13px', color: 'var(--secondary)', marginBottom: '12px' }}>
+                      These aren't applied automatically in "Build Resume" — apply formatting and ordering changes manually in the exported file.
+                    </p>
                     <ul style={{ listStyleType: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: '12px' }}>
                       {structureSuggestions.map((st, i) => (
                         <li key={i} style={{ borderBottom: i < structureSuggestions.length - 1 ? '1px solid var(--outline)' : 'none', paddingBottom: i < structureSuggestions.length - 1 ? '12px' : '0' }}>
