@@ -428,7 +428,7 @@ function App() {
               </div>
             )}
 
-            <div className="action-bar mt-6 card flex justify-between items-center" style={{ backgroundColor: 'var(--surface-container-low)' }}>
+            <div className="action-bar mt-6 card flex justify-between items-center flex-wrap gap-4" style={{ backgroundColor: 'var(--surface-container-low)' }}>
               <div>
                 <p style={{ fontWeight: 600, color: 'var(--primary)' }}>Ready for Analysis</p>
                 <p style={{ fontSize: '14px', color: 'var(--secondary)' }}>Upload both a resume and job description to proceed.</p>
@@ -461,7 +461,7 @@ function App() {
 
         {step === 2 && (
           <div className="step-container">
-            <div className="mb-6 flex justify-between items-center">
+            <div className="sticky-action-bar flex justify-between items-center flex-wrap gap-4">
               <div className="flex items-center gap-2 cursor-pointer" onClick={resetFlow} style={{ color: 'var(--secondary)' }}>
                  <ArrowRight size={16} style={{ transform: 'rotate(180deg)' }}/> Start Over
               </div>
@@ -497,7 +497,7 @@ function App() {
 
                {summarySuggestion && (
                  <div className="card">
-                    <div className="flex justify-between items-start mb-4">
+                    <div className="flex justify-between items-start mb-4 flex-wrap gap-4">
                       <label className="label mb-0" style={{ fontSize: '16px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
                         Summary Suggestion
                         {summarySuggestion.needs_review && (
@@ -560,7 +560,7 @@ function App() {
                       
                       {expandedKeyword !== null && keywordSuggestions[expandedKeyword] && (
                         <div className="suggestion-item" style={{ backgroundColor: 'var(--surface-container-lowest)' }}>
-                          <div className="flex justify-between items-start mb-2">
+                          <div className="flex justify-between items-start mb-2 flex-wrap gap-4">
                             <div>
                               <span style={{ fontWeight: 600, color: 'var(--primary)' }}>{keywordSuggestions[expandedKeyword].keyword}</span>
                               <span style={{ marginLeft: '8px', fontSize: '12px', color: 'var(--secondary)', textTransform: 'capitalize' }}>
@@ -692,7 +692,7 @@ function App() {
                   
                   {coverLetterVariants ? (
                     <div className="text-left mt-6">
-                      <div className="flex justify-between items-center mb-4">
+                      <div className="flex justify-between items-center mb-4 flex-wrap gap-4">
                         <span style={{ fontWeight: 600, color: 'var(--primary)' }}>Generated Cover Letter</span>
                         <div style={{ display: 'flex', gap: '8px', backgroundColor: 'var(--surface)', padding: '4px', borderRadius: '8px', border: '1px solid var(--outline)' }}>
                           <button 
@@ -781,7 +781,7 @@ function App() {
               </div>
             )}
 
-            <div className="action-bar mt-6 card flex justify-between items-center max-w-4xl mx-auto" style={{ backgroundColor: 'var(--surface-container-low)' }}>
+            <div className="action-bar mt-6 card flex justify-between items-center flex-wrap gap-4 max-w-4xl mx-auto" style={{ backgroundColor: 'var(--surface-container-low)' }}>
               <div>
                 <p style={{ fontWeight: 600, color: 'var(--primary)' }}>Ready for Analysis</p>
                 <p style={{ fontSize: '14px', color: 'var(--secondary)' }}>Generate new suggestions instantly without re-uploading.</p>
