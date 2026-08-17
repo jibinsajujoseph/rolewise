@@ -276,7 +276,7 @@ function App() {
   };
 
   const resetFlow = () => {
-    if (step === 2 && !window.confirm("Are you sure you want to start over? Any unsaved analysis will be lost.")) {
+    if ((step === 2 || step === 3) && !window.confirm("Are you sure you want to start over? Any unsaved analysis will be lost.")) {
       return;
     }
     setStep(1);
